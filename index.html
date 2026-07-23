@@ -58,6 +58,9 @@ input,select,textarea{font-family:inherit;font-size:14px}
 table.fit{table-layout:auto;width:100%}
 table.fit th{white-space:normal;text-align:center}
 table.fit td{white-space:normal}
+table.tight th{padding:7px 6px;font-size:10px;line-height:1.25}
+table.tight td{padding:6px 6px;font-size:12px}
+table.tight td.wrap{min-width:140px;max-width:200px}
 h2.page-title{font-size:19px;margin-bottom:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 1px 3px rgba(16,24,40,.05)}
 .card h3{font-size:15px;margin-bottom:12px}
@@ -627,7 +630,7 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
   });
   const c={GREEN:0,YELLOW:0,RED:0,BLACK:0};
   allEmps.forEach(e=>c[calcStatus(e)]++);
-  const indHeads=INDICATORS.map(([,l])=>`<th>${esc(l)}</th>`).join("");
+  const indHeads=INDICATORS.map(([,l])=>`<th>${esc(l).replace(/ in /," in<br>").replace(/ with /," with<br>").replace(/ from /," from<br>")}</th>`).join("");
   const rows=emps.map((e,i)=>{
     const st=calcStatus(e), sc=calcScore(e);
     const scBg = st==="GREEN"?"var(--green-bg)":st==="YELLOW"?"var(--yellow-bg)":st==="RED"?"var(--red-bg)":"var(--black-bg)";
@@ -665,9 +668,9 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
       <button class="btn btn-primary btn-sm" onclick="openEmpModal()">＋ Add Employee</button>`}
     </div>
     ${allEmps.length===0? `<div class="empty">No employees yet.${readOnly?"":" Click <b>＋ Add Employee</b> to start tracking."}</div>`:`
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>#</th><th>Employee Name</th><th>Employee ID</th><th>Position</th><th>Date Hired</th><th>Risk Status</th>
-      ${indHeads}<th>With Active CAP?</th><th>Risk Score</th><th>Rating (Last 3 Mo.)</th><th>TL Notes</th><th>Last Updated</th>${readOnly?"":"<th>Actions</th>"}</tr></thead>
+    <div class="tbl-wrap"><table class="fit tight">
+      <thead><tr><th>#</th><th>Employee<br>Name</th><th>Employee<br>ID</th><th>Position</th><th>Date<br>Hired</th><th>Risk<br>Status</th>
+      ${indHeads}<th>With Active<br>CAP?</th><th>Risk<br>Score</th><th>Rating<br>(Last 3 Mo.)</th><th>TL Notes</th><th>Last<br>Updated</th>${readOnly?"":"<th>Actions</th>"}</tr></thead>
       <tbody>${rows}</tbody></table></div>`}
   </div>`;
 }
