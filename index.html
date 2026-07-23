@@ -786,28 +786,30 @@ function renderPerformer(){
     const last=emps.reduce((a,e)=>Math.max(a,new Date(e.updated_at).getTime()),0);
     return {p, n:emps.length, avg, last};
   });
-  const stale=items.filter(x=>x.n>0 && x.avg>9).sort((a,b)=>b.avg-a.avg);
+  const flagged=items.filter(x=>x.n>0 && (x.avg>7 || x.avg<5)).sort((a,b)=>b.avg-a.avg);
   const noData=items.filter(x=>x.n===0);
-  const rows=stale.map((x,i)=>`<tr>
+  const inWindow=tls.length-flagged.length-noData.length;
+  const rows=flagged.map((x,i)=>`<tr>
     <td>${i+1}</td>
     <td><b>${esc(x.p.name||x.p.email)}</b><br><span style="color:var(--muted);font-size:11.5px">${esc(x.p.email)}</span></td>
     <td style="text-align:center">${x.n}</td>
-    <td style="text-align:center"><span class="score-pill" style="background:${x.avg>20?"var(--red-bg)":"var(--yellow-bg)"}">${x.avg.toFixed(1)} days</span></td>
+    <td style="text-align:center"><span class="score-pill" style="background:${x.avg>7?"var(--red-bg)":"var(--green-bg)"}">${x.avg.toFixed(1)} days</span></td>
     <td style="text-align:center">${new Date(x.last).toISOString().slice(0,10)}</td>
-    <td>${x.avg>20?"🔴 Critically outdated":"🟡 Needs follow-up"}</td>
+    <td>${x.avg>7?"🔴 Overdue — avg more than 7 days":"🟢 Fresh — avg less than 5 days"}</td>
     <td><button class="btn btn-ghost btn-sm" onclick="navigate('dashboard');drillTeam('${x.p.id}')">View Team →</button></td>
   </tr>`).join("");
   return `
   <h2 class="page-title">🚦 Performer — Tracker Update Compliance</h2>
   <div class="stats">
     <div class="stat"><div class="num">${tls.length}</div><div class="lbl">Active Team Leads</div></div>
-    <div class="stat s-red"><div class="num">${stale.length}</div><div class="lbl">Avg Update Older Than 9 Days</div></div>
-    <div class="stat s-green"><div class="num">${tls.length-stale.length-noData.length}</div><div class="lbl">Up to Date (≤ 9 Days)</div></div>
+    <div class="stat s-red"><div class="num">${flagged.filter(x=>x.avg>7).length}</div><div class="lbl">🔴 Avg Older Than 7 Days</div></div>
+    <div class="stat s-green"><div class="num">${flagged.filter(x=>x.avg<5).length}</div><div class="lbl">🟢 Avg Under 5 Days</div></div>
+    <div class="stat"><div class="num">${inWindow}</div><div class="lbl">Within 5–7 Day Window</div></div>
     <div class="stat s-yellow"><div class="num">${noData.length}</div><div class="lbl">No Entries Yet</div></div>
   </div>
   <div class="card">
-    <h3>⚠️ Team leads whose entries average more than 9 days without an update</h3>
-    ${stale.length===0? `<div class="empty">🎉 Nobody is behind — every team's average last-update is within 9 days.</div>`:`
+    <h3>Team leads whose average last-update is more than 7 days or less than 5 days old</h3>
+    ${flagged.length===0? `<div class="empty">Nobody flagged — every team's average last-update falls within the 5–7 day window.</div>`:`
     <div class="tbl-wrap"><table class="fit">
       <thead><tr><th>#</th><th>Team / User</th><th>Employees</th><th>Avg Days Since Update</th><th>Most Recent Update</th><th>Flag</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`}
