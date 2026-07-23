@@ -48,7 +48,11 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .topbar .who{font-size:13px;color:#dbe4ff}
 .topbar .logout{background:rgba(255,255,255,.14);border:none;color:#fff;padding:7px 14px;border-radius:8px;font-weight:600}
 .topbar .logout:hover{background:rgba(255,255,255,.25)}
-.main{padding:22px;max-width:1500px;margin:0 auto}
+.main{padding:22px;max-width:none;margin:0 auto}
+table.fit{table-layout:auto;width:100%}
+table.fit th{white-space:normal;text-align:center}
+table.fit th:first-child{text-align:left}
+table.fit td{white-space:normal}
 h2.page-title{font-size:19px;margin-bottom:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 1px 3px rgba(16,24,40,.05)}
 .card h3{font-size:15px;margin-bottom:12px}
@@ -431,7 +435,7 @@ function renderDashboard(){
   <div class="card">
     <h3>Team-Level Risk Summary</h3>
     ${tls.length===0? `<div class="empty">No approved team leads yet. Approve signups in the <b>Users</b> tab.</div>`:`
-    <div class="tbl-wrap"><table>
+    <div class="tbl-wrap"><table class="fit">
       <thead><tr><th>Team / User</th><th>Headcount</th><th>🟢</th><th>🟡</th><th>🔴</th><th>⚫</th><th>% At Risk</th><th>Avg Score</th><th>Top Indicator</th><th>Action Priority</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`}
   </div>
@@ -694,8 +698,8 @@ function renderHeadcount(){
       <div class="spacer"></div>
       ${editable? `<button class="btn btn-primary btn-sm" onclick="openHcModal()">＋ Add Monthly Entry</button>`:""}
     </div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th style="min-width:190px">Overall</th>${mh}</tr></thead>
+    <div class="tbl-wrap"><table class="fit">
+      <thead><tr><th style="min-width:150px">Overall</th>${mh}</tr></thead>
       <tbody>
         ${row("Opening HC","opening",{strong:true})}
         ${row("New Hires","nh")}
