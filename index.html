@@ -640,7 +640,7 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
       <td>${statusBadge(st)}</td>${indCells}
       <td style="text-align:center" class="${e.cap==="YES"?"yn-yes":"yn-no"}">${e.cap||"NO"}</td>
       <td style="text-align:center"><span class="score-pill" style="background:${scBg}">${sc}</span></td>
-      <td>${esc(e.rating)}</td><td class="wrap">${esc(e.notes)}</td><td>${fmtDate(e.updated_at)}</td>
+      <td>${esc(e.rating)}</td><td class="wrap">${esc(e.notes)}</td>${readOnly?"":`<td>${fmtDate(e.updated_at)}</td>`}
       ${readOnly?"":`<td class="row-actions">
         <button class="btn btn-ghost btn-sm" onclick="openEmpModal('${e.id}')">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}</tr>`;
@@ -670,7 +670,7 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
     ${allEmps.length===0? `<div class="empty">No employees yet.${readOnly?"":" Click <b>＋ Add Employee</b> to start tracking."}</div>`:`
     <div class="tbl-wrap"><table class="fit tight">
       <thead><tr><th>#</th><th>Employee<br>Name</th><th>Employee<br>ID</th><th>Position</th><th>Date<br>Hired</th><th>Risk<br>Status</th>
-      ${indHeads}<th>With Active<br>CAP?</th><th>Risk<br>Score</th><th>Rating<br>(Last 3 Mo.)</th><th>TL Notes</th><th>Last<br>Updated</th>${readOnly?"":"<th>Actions</th>"}</tr></thead>
+      ${indHeads}<th>With Active<br>CAP?</th><th>Risk<br>Score</th><th>Rating<br>(Last 3 Mo.)</th><th>TL Notes</th>${readOnly?"":"<th>Last<br>Updated</th>"}${readOnly?"":"<th>Actions</th>"}</tr></thead>
       <tbody>${rows}</tbody></table></div>`}
   </div>`;
 }
