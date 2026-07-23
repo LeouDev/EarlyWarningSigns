@@ -201,6 +201,30 @@ td.wrap{white-space:normal;min-width:180px;max-width:280px}
   </div>
 </div>
 
+<!-- ================= HEADCOUNT MODAL ================= -->
+<div class="modal-bg" id="hcModalBg">
+  <div class="modal" style="width:560px">
+    <h3 id="hcModalTitle">Headcount Entry</h3>
+    <div class="grid2">
+      <div class="field"><label>Month</label>
+        <select id="h_month"><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></div>
+      <div class="field"><label>Opening HC</label><input id="h_opening" type="number" min="0" placeholder="Auto (prev. month closing)"></div>
+      <div class="field"><label>New Hires</label><input id="h_hires" type="number" min="0" value="0"></div>
+      <div class="field"><label>Transfer In</label><input id="h_tin" type="number" min="0" value="0"></div>
+      <div class="field"><label>Transfer Out</label><input id="h_tout" type="number" min="0" value="0"></div>
+      <div class="field"><label>Voluntary Attrition</label><input id="h_vol" type="number" min="0" value="0"></div>
+      <div class="field"><label>Involuntary Attrition</label><input id="h_invol" type="number" min="0" value="0"></div>
+      <div class="field"><label>Projected Attrition</label><input id="h_proj" type="number" min="0" value="0"></div>
+    </div>
+    <p style="font-size:12px;color:var(--muted)">Closing HC = Opening + New Hires + Transfer In − Transfer Out − (Voluntary + Involuntary). Leave Opening blank to carry over last month's closing.</p>
+    <div class="modal-foot">
+      <button class="btn btn-danger btn-sm" id="hcDeleteBtn" style="display:none;margin-right:auto" onclick="deleteHc()">Delete Entry</button>
+      <button class="btn btn-ghost" onclick="closeModal('hcModalBg')">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="saveHcBtn" onclick="saveHc()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -316,8 +340,8 @@ async function enterApp(){
 }
 function buildTabs(){
   const tabs = PROFILE.role==="admin"
-    ? [["dashboard","📊 Dashboard"],["users","👥 Users"],["settings","⚙️ Settings"]]
-    : [["myteam","📋 My Team"],["settings","⚙️ Settings"]];
+    ? [["dashboard","📊 Dashboard"],["headcount","📈 Headcount"],["users","👥 Users"],["settings","⚙️ Settings"]]
+    : [["myteam","📋 My Team"],["headcount","📈 Headcount"],["settings","⚙️ Settings"]];
   document.getElementById("navTabs").innerHTML =
     tabs.map(([id,lbl])=>`<button id="tab_${id}" onclick="navigate('${id}')">${lbl}</button>`).join("");
 }
@@ -333,10 +357,12 @@ async function render(){
   try{
     if(PROFILE.role==="admin"){
       if(currentTab==="dashboard"){ await loadAdminData(); el.innerHTML = viewingTeamId? renderTeamDrill() : renderDashboard(); }
+      else if(currentTab==="headcount"){ await loadAdminData(); await loadHc(true); el.innerHTML = renderHeadcount(); }
       else if(currentTab==="users"){ await loadAdminData(); el.innerHTML = renderUsers(); }
       else el.innerHTML = renderSettings();
     } else {
       if(currentTab==="myteam"){ await loadMyEmployees(); el.innerHTML = renderTracker(PROFILE.id, EMPS, false); }
+      else if(currentTab==="headcount"){ await loadHc(false); el.innerHTML = renderHeadcount(); }
       else el.innerHTML = renderSettings();
     }
   }catch(e){ el.innerHTML=`<div class="empty">⚠️ ${esc(e.message||"Failed to load data.")}</div>`; }
@@ -587,6 +613,160 @@ async function removeUser(id){
   const {error} = await sb.from("profiles").delete().eq("id",id);
   if(error){ toast("Failed: "+error.message); return; }
   toast("User removed."); render();
+}
+
+/* =============== HEADCOUNT MOVEMENT =============== */
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let HC_ALL=[];                       // loaded rows (mine, or all if admin)
+let HC_YEAR=new Date().getFullYear();
+let HC_TEAM="all";                   // admin selector: "all" or profile id
+
+async function loadHc(isAdmin){
+  let q=sb.from("headcount").select("*");
+  if(!isAdmin) q=q.eq("owner",PROFILE.id);
+  const {data,error}=await q;
+  if(error) throw error;
+  HC_ALL=data||[];
+}
+function num(v){ const n=parseInt(v,10); return isNaN(n)?0:n; }
+function hcChain(entries, year){
+  const out=[]; let prevClose=null;
+  for(let m=1;m<=12;m++){
+    const e=entries.find(x=>x.month===m&&x.year===year)||null;
+    const opening = e&&e.opening_hc!=null? e.opening_hc : (prevClose!=null?prevClose:0);
+    const nh=e?num(e.new_hires):0, ti=e?num(e.transfer_in):0, to=e?num(e.transfer_out):0;
+    const v=e?num(e.vol_attr):0, iv=e?num(e.invol_attr):0, pj=e?num(e.proj_attr):0;
+    const actual=v+iv, closing=opening+nh+ti-to-actual;
+    out.push({month:m,opening,nh,ti,to,v,iv,pj,actual,closing,entry:e});
+    prevClose=closing;
+  }
+  return out;
+}
+function hcAggregate(year){
+  const owners=[...new Set(HC_ALL.map(r=>r.owner))];
+  const chains=owners.map(o=>hcChain(HC_ALL.filter(r=>r.owner===o),year));
+  const out=[];
+  for(let i=0;i<12;i++){
+    const agg={month:i+1,opening:0,nh:0,ti:0,to:0,v:0,iv:0,pj:0,actual:0,closing:0,entry:null};
+    chains.forEach(ch=>{ ["opening","nh","ti","to","v","iv","pj","actual","closing"].forEach(k=>agg[k]+=ch[i][k]); });
+    out.push(agg);
+  }
+  return out;
+}
+function renderHeadcount(){
+  const isAdmin=PROFILE.role==="admin";
+  let chain, label, editable=false;
+  if(isAdmin){
+    if(HC_TEAM==="all"){ chain=hcAggregate(HC_YEAR); label="Overall — All Teams"; }
+    else{ const p=ALL_PROFILES.find(x=>x.id===HC_TEAM);
+      chain=hcChain(HC_ALL.filter(r=>r.owner===HC_TEAM),HC_YEAR); label=p?(p.name||p.email):"Team"; }
+  } else { chain=hcChain(HC_ALL,HC_YEAR); label=PROFILE.name||PROFILE.email; editable=true; }
+
+  const yearOpts=[HC_YEAR-1,HC_YEAR,HC_YEAR+1].filter((v,i,a)=>a.indexOf(v)===i)
+    .concat([2025,2026,2027].filter(y=>![HC_YEAR-1,HC_YEAR,HC_YEAR+1].includes(y)))
+    .sort().map(y=>`<option value="${y}" ${y===HC_YEAR?"selected":""}>${y}</option>`).join("");
+  const teamSel = isAdmin? `<select id="hcTeamSel" onchange="HC_TEAM=this.value;render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">
+      <option value="all" ${HC_TEAM==="all"?"selected":""}>Overall — All Teams</option>
+      ${ALL_PROFILES.filter(p=>p.role!=="admin"&&p.approved).map(p=>`<option value="${p.id}" ${HC_TEAM===p.id?"selected":""}>${esc(p.name||p.email)}</option>`).join("")}
+    </select>`:"";
+
+  const mh=chain.map(c=>`<th style="text-align:center">${MONTHS[c.month-1]}'${String(HC_YEAR).slice(2)}</th>`).join("");
+  const editRow = editable? `<tr><td style="font-size:11px;color:var(--muted)">Add / Edit</td>${chain.map(c=>
+      `<td style="text-align:center"><button class="btn btn-ghost btn-sm" title="${c.entry?"Edit":"Add"} ${MONTHS[c.month-1]}" onclick="openHcModal(${c.month})">${c.entry?"✏️":"＋"}</button></td>`).join("")}</tr>`:"";
+  const row=(lbl,key,opts={})=>`<tr ${opts.strong?'style="background:#eef2f9;font-weight:700"':""}>
+      <td ${opts.indent?'style="padding-left:24px"':""}>${lbl}</td>
+      ${chain.map(c=>`<td style="text-align:center;${opts.red?"color:var(--red);font-weight:700;":""}${opts.strong?"font-weight:700;":""}">${c[key]}</td>`).join("")}</tr>`;
+
+  const ytd=chain.reduce((a,c)=>({nh:a.nh+c.nh,act:a.act+c.actual,v:a.v+c.v,iv:a.iv+c.iv}),{nh:0,act:0,v:0,iv:0});
+  return `
+  <h2 class="page-title">📈 Headcount Movement Tracker — ${esc(label)}</h2>
+  <div class="stats">
+    <div class="stat"><div class="num">${chain[11].closing}</div><div class="lbl">Projected Year-End HC</div></div>
+    <div class="stat s-green"><div class="num">${ytd.nh}</div><div class="lbl">New Hires (YTD)</div></div>
+    <div class="stat s-red"><div class="num">${ytd.act}</div><div class="lbl">Actual Attrition (YTD)</div></div>
+    <div class="stat s-yellow"><div class="num">${ytd.v}</div><div class="lbl">Voluntary (YTD)</div></div>
+    <div class="stat s-black"><div class="num">${ytd.iv}</div><div class="lbl">Involuntary (YTD)</div></div>
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      ${teamSel}
+      <select onchange="HC_YEAR=parseInt(this.value);render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">${yearOpts}</select>
+      <div class="spacer"></div>
+      ${editable? `<button class="btn btn-primary btn-sm" onclick="openHcModal()">＋ Add Monthly Entry</button>`:""}
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th style="min-width:190px">Overall</th>${mh}</tr></thead>
+      <tbody>
+        ${row("Opening HC","opening",{strong:true})}
+        ${row("New Hires","nh")}
+        ${row("Transfer In","ti")}
+        ${row("Transfer Out","to")}
+        ${row("Actual Attrition","actual",{red:true})}
+        ${row("Voluntary Attrition","v",{indent:true})}
+        ${row("Involuntary Attrition","iv",{indent:true})}
+        ${row("Projected Attrition","pj",{indent:true})}
+        ${row("Closing HC","closing",{strong:true})}
+        ${editRow}
+      </tbody></table></div>
+    ${editable?"":`<p style="font-size:12px;color:var(--muted);margin-top:10px">Read-only view. Team leads enter their own monthly figures in their 📈 Headcount tab.</p>`}
+  </div>`;
+}
+function openHcModal(month){
+  const now=new Date();
+  const m = month || (HC_YEAR===now.getFullYear()? now.getMonth()+1 : 1);
+  const e = HC_ALL.find(x=>x.owner===PROFILE.id&&x.year===HC_YEAR&&x.month===m)||null;
+  document.getElementById("hcModalTitle").textContent=`Headcount Entry — ${MONTHS[m-1]} ${HC_YEAR}`;
+  document.getElementById("h_month").value=String(m);
+  document.getElementById("h_opening").value = e&&e.opening_hc!=null? e.opening_hc : "";
+  document.getElementById("h_hires").value = e?e.new_hires:0;
+  document.getElementById("h_tin").value = e?e.transfer_in:0;
+  document.getElementById("h_tout").value = e?e.transfer_out:0;
+  document.getElementById("h_vol").value = e?e.vol_attr:0;
+  document.getElementById("h_invol").value = e?e.invol_attr:0;
+  document.getElementById("h_proj").value = e?e.proj_attr:0;
+  document.getElementById("hcDeleteBtn").style.display = e? "inline-block":"none";
+  document.getElementById("hcModalBg").classList.add("open");
+}
+document.addEventListener("change",e=>{
+  if(e.target.id==="h_month"){
+    const m=parseInt(e.target.value);
+    const ex=HC_ALL.find(x=>x.owner===PROFILE.id&&x.year===HC_YEAR&&x.month===m);
+    document.getElementById("hcModalTitle").textContent=`Headcount Entry — ${MONTHS[m-1]} ${HC_YEAR}`;
+    document.getElementById("hcDeleteBtn").style.display = ex? "inline-block":"none";
+    if(ex){ document.getElementById("h_opening").value=ex.opening_hc!=null?ex.opening_hc:"";
+      document.getElementById("h_hires").value=ex.new_hires; document.getElementById("h_tin").value=ex.transfer_in;
+      document.getElementById("h_tout").value=ex.transfer_out; document.getElementById("h_vol").value=ex.vol_attr;
+      document.getElementById("h_invol").value=ex.invol_attr; document.getElementById("h_proj").value=ex.proj_attr; }
+  }
+});
+async function saveHc(){
+  const m=parseInt(document.getElementById("h_month").value);
+  const openRaw=document.getElementById("h_opening").value;
+  const row={
+    owner:PROFILE.id, year:HC_YEAR, month:m,
+    opening_hc: openRaw===""? null : num(openRaw),
+    new_hires:num(document.getElementById("h_hires").value),
+    transfer_in:num(document.getElementById("h_tin").value),
+    transfer_out:num(document.getElementById("h_tout").value),
+    vol_attr:num(document.getElementById("h_vol").value),
+    invol_attr:num(document.getElementById("h_invol").value),
+    proj_attr:num(document.getElementById("h_proj").value),
+    updated_at:new Date().toISOString()
+  };
+  const btn=document.getElementById("saveHcBtn");
+  btn.disabled=true; btn.textContent="Saving…";
+  const {error}=await sb.from("headcount").upsert(row,{onConflict:"owner,year,month"});
+  btn.disabled=false; btn.textContent="Save Entry";
+  if(error){ toast("Save failed: "+error.message); return; }
+  closeModal("hcModalBg"); toast(`${MONTHS[m-1]} ${HC_YEAR} saved ✓`); render();
+}
+async function deleteHc(){
+  const m=parseInt(document.getElementById("h_month").value);
+  if(!confirm(`Delete the ${MONTHS[m-1]} ${HC_YEAR} entry?`)) return;
+  const {error}=await sb.from("headcount").delete()
+    .eq("owner",PROFILE.id).eq("year",HC_YEAR).eq("month",m);
+  if(error){ toast("Delete failed: "+error.message); return; }
+  closeModal("hcModalBg"); toast("Entry deleted."); render();
 }
 
 /* =============== SETTINGS =============== */
