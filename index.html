@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EWS Tracker — Early Warning Signs</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#f4f6fa; --card:#ffffff; --ink:#1c2333; --muted:#6b7280; --line:#e5e9f0;
+  --brand:#1f3a8a; --brand2:#3b5bdb; --green:#16a34a; --yellow:#d97706; --red:#dc2626; --black:#111827;
+  --green-bg:#dcfce7; --yellow-bg:#fef3c7; --red-bg:#fee2e2; --black-bg:#e5e7eb;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+#loginView{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1f3a8a 0%,#3b5bdb 60%,#5f3dc4 100%);padding:20px}
+.login-card{background:#fff;border-radius:16px;padding:40px;width:400px;max-width:94vw;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.login-card h1{font-size:22px;margin-bottom:4px}
+.login-card p.sub{color:var(--muted);margin-bottom:22px;font-size:13px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--brand2);box-shadow:0 0 0 3px rgba(59,91,219,.15)}
+.btn{border:none;border-radius:8px;padding:10px 16px;font-weight:600;font-size:14px}
+.btn-primary{background:var(--brand2);color:#fff;width:100%}
+.btn-primary:hover{background:var(--brand)}
+.btn-sm{padding:6px 12px;font-size:12.5px;width:auto}
+.btn-ghost{background:#eef1f7;color:var(--ink)}
+.btn-ghost:hover{background:#e2e7f0}
+.btn-danger{background:var(--red);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.err{color:var(--red);font-size:13px;margin-top:10px;min-height:18px}
+.ok-msg{color:var(--green);font-size:13px;margin-top:10px}
+.login-toggle{margin-top:16px;text-align:center;font-size:13px;color:var(--muted)}
+.login-toggle a{color:var(--brand2);cursor:pointer;font-weight:600;text-decoration:underline}
+.setup-banner{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:10px;padding:12px 14px;font-size:12.5px;margin-bottom:18px;line-height:1.5}
+
+#appView{display:none;min-height:100vh}
+.topbar{background:var(--brand);color:#fff;padding:0 22px;height:58px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+.topbar .logo{font-weight:700;font-size:16px;white-space:nowrap}
+.topbar .tabs{display:flex;gap:4px;margin-left:12px}
+.topbar .tabs button{background:transparent;border:none;color:#c7d2fe;padding:8px 14px;border-radius:8px;font-weight:600;font-size:13.5px}
+.topbar .tabs button.active,.topbar .tabs button:hover{background:rgba(255,255,255,.16);color:#fff}
+.topbar .spacer{flex:1}
+.topbar .who{font-size:13px;color:#dbe4ff}
+.topbar .logout{background:rgba(255,255,255,.14);border:none;color:#fff;padding:7px 14px;border-radius:8px;font-weight:600}
+.topbar .logout:hover{background:rgba(255,255,255,.25)}
+.main{padding:22px;max-width:1500px;margin:0 auto}
+h2.page-title{font-size:19px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 1px 3px rgba(16,24,40,.05)}
+.card h3{font-size:15px;margin-bottom:12px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat .num{font-size:24px;font-weight:700}
+.stat .lbl{font-size:12px;color:var(--muted);margin-top:2px}
+.stat.s-green .num{color:var(--green)} .stat.s-yellow .num{color:var(--yellow)}
+.stat.s-red .num{color:var(--red)} .stat.s-black .num{color:var(--black)}
+
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}
+th{background:#1f3a8a;color:#fff;padding:9px 10px;text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr:hover td{background:#f8faff}
+td.wrap{white-space:normal;min-width:180px;max-width:280px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:700;font-size:11.5px;white-space:nowrap}
+.b-GREEN{background:var(--green-bg);color:var(--green)}
+.b-YELLOW{background:var(--yellow-bg);color:var(--yellow)}
+.b-RED{background:var(--red-bg);color:var(--red)}
+.b-BLACK{background:var(--black-bg);color:var(--black)}
+.yn-yes{color:var(--red);font-weight:700}
+.yn-no{color:#9ca3af}
+.score-pill{display:inline-block;min-width:28px;text-align:center;padding:3px 8px;border-radius:6px;font-weight:700}
+.row-actions button{margin-right:4px}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.toolbar input[type=text]{padding:9px 12px;border:1px solid var(--line);border-radius:8px;min-width:240px}
+.toolbar .spacer{flex:1}
+.empty{padding:36px;text-align:center;color:var(--muted)}
+.loading{padding:48px;text-align:center;color:var(--muted);font-size:15px}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:flex-start;justify-content:center;overflow-y:auto;padding:36px 16px}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:14px;padding:24px;width:760px;max-width:96vw;box-shadow:0 24px 80px rgba(0,0,0,.35)}
+.modal h3{font-size:17px;margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.ind-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 14px}
+.ind{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px}
+.switch{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
+.switch button{border:none;background:#f3f4f6;padding:4px 12px;font-size:12px;font-weight:700;color:#9ca3af}
+.switch button.on-yes{background:var(--red);color:#fff}
+.switch button.on-no{background:var(--green);color:#fff}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.score-preview{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px 14px;display:flex;gap:18px;align-items:center;font-size:13px;flex-wrap:wrap}
+
+.user-row{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.user-row:last-child{border-bottom:none}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--brand2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
+.user-row .uname{font-weight:600}
+.user-row .usub{font-size:12px;color:var(--muted)}
+.user-row .spacer{flex:1}
+.tag{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700}
+.tag-ok{background:var(--green-bg);color:var(--green)}
+.tag-pending{background:var(--yellow-bg);color:var(--yellow)}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:11px 20px;border-radius:10px;font-size:13.5px;z-index:300;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+.pending-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1f3a8a,#5f3dc4);padding:20px}
+@media(max-width:760px){.grid2,.grid3,.ind-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN / SIGNUP ================= -->
+<div id="loginView">
+  <div class="login-card">
+    <h1>🔍 EWS Tracker</h1>
+    <p class="sub">Early Warning Signs — Attrition Risk Monitoring</p>
+    <div id="setupBanner" class="setup-banner" style="display:none">
+      ⚠️ <b>Setup needed:</b> open this file in a text editor and paste your Supabase <b>Project URL</b> and <b>anon key</b> into the CONFIG block near the top of the &lt;script&gt; section.
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="loginForm">
+      <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" placeholder="you@example.com"></div>
+      <div class="field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" placeholder="Your password"></div>
+      <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Sign In</button>
+      <div class="err" id="loginErr"></div>
+      <div class="login-toggle">No account yet? <a onclick="showSignup(true)">Sign up</a></div>
+    </div>
+
+    <!-- SIGNUP FORM -->
+    <div id="signupForm" style="display:none">
+      <div class="field"><label>Full Name / Team Label</label><input id="suName" placeholder="e.g. Aida Marie Rodriguez"></div>
+      <div class="field"><label>Email</label><input id="suEmail" type="email" placeholder="you@example.com"></div>
+      <div class="field"><label>Password</label><input id="suPass" type="password" placeholder="Min. 6 characters"></div>
+      <button class="btn btn-primary" id="signupBtn" onclick="doSignup()">Create Account</button>
+      <div class="err" id="signupErr"></div>
+      <div class="ok-msg" id="signupOk"></div>
+      <div class="login-toggle">Already have an account? <a onclick="showSignup(false)">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="appView">
+  <div class="topbar">
+    <span class="logo">🔍 EWS Tracker</span>
+    <div class="tabs" id="navTabs"></div>
+    <div class="spacer"></div>
+    <span class="who" id="whoAmI"></span>
+    <button class="logout" onclick="doLogout()">Logout</button>
+  </div>
+  <div class="main" id="mainContent"><div class="loading">Loading…</div></div>
+</div>
+
+<!-- ================= PENDING APPROVAL ================= -->
+<div id="pendingView" style="display:none">
+  <div class="pending-wrap">
+    <div class="login-card" style="text-align:center">
+      <h1>⏳</h1>
+      <h1 style="font-size:19px;margin:8px 0">Waiting for Approval</h1>
+      <p class="sub" style="margin-bottom:20px">Your account was created and is pending admin approval.<br>Please check back later or contact your administrator.</p>
+      <button class="btn btn-ghost" style="width:100%" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EMPLOYEE MODAL ================= -->
+<div class="modal-bg" id="empModalBg">
+  <div class="modal">
+    <h3 id="empModalTitle">Add Employee</h3>
+    <div class="grid2">
+      <div class="field"><label>Employee Name *</label><input id="f_name" placeholder="Last, First MI"></div>
+      <div class="field"><label>Employee ID *</label><input id="f_empid" placeholder="e.g. 1370513"></div>
+      <div class="field"><label>Position</label><input id="f_pos" placeholder="e.g. QA Analyst"></div>
+      <div class="field"><label>Date Hired</label><input id="f_hired" type="date"></div>
+    </div>
+    <div class="field"><label>Warning Indicators</label></div>
+    <div class="ind-grid" id="indGrid"></div>
+    <div class="grid3">
+      <div class="field"><label>With Active CAP?</label>
+        <select id="f_cap" onchange="updatePreview()"><option>NO</option><option>YES</option></select></div>
+      <div class="field"><label>Rating (Last 3 Mo.)</label><input id="f_rating" placeholder="e.g. 4.2 / Meets"></div>
+      <div class="field"><label>Confirmed Attrition?</label>
+        <select id="f_attrition" onchange="updatePreview()"><option value="">No — auto status</option><option value="BLACK">⚫ Yes — mark BLACK</option></select></div>
+    </div>
+    <div class="field"><label>TL Notes</label><textarea id="f_notes" rows="2" placeholder="Observations, coaching actions, retention conversations…"></textarea></div>
+    <div class="score-preview">
+      <span>Risk Score: <b id="prevScore">0</b></span>
+      <span>Status: <span id="prevStatus" class="badge b-GREEN">🟢 GREEN</span></span>
+      <span style="color:var(--muted);font-size:12px">Score = YES indicators + Active CAP · 0 GREEN · 1–3 YELLOW · 4+ RED · Confirmed BLACK</span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('empModalBg')">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="saveEmpBtn" onclick="saveEmployee()">Save Employee</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your Supabase project values here.
+   Supabase Dashboard → Project Settings → API:
+     Project URL  →  SUPABASE_URL
+     anon public  →  SUPABASE_ANON_KEY
+   ============================================================ */
+const SUPABASE_URL = "https://yxewmpzfkcpsowluejnz.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_zZNmW2AYhb_Vwvs38_RR5A_UiLGKhqF";
+/* ============================================================ */
+
+const CONFIGURED = SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY.length > 20 && !SUPABASE_ANON_KEY.includes("PASTE");
+let sb = null;
+if (CONFIGURED) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const INDICATORS = [
+  ["tardy","Frequent Tardiness"],
+  ["absent","Increased Absences"],
+  ["lowprod","Low Productivity"],
+  ["diseng","Disengagement in Team Huddles"],
+  ["jobhunt","Job Hunting Signals"],
+  ["conflict","Conflicts with Teammates"],
+  ["qadrop","Decline in QA/NPS Scores"],
+  ["noinit","Reduced Initiative"],
+  ["loa","Requesting LOA/Leaves"],
+  ["withdraw","Withdrawal from Social Activities"]
+];
+const STATUS_META = {GREEN:{icon:"🟢"},YELLOW:{icon:"🟡"},RED:{icon:"🔴"},BLACK:{icon:"⚫"}};
+
+let PROFILE = null;        // my profile row
+let ALL_PROFILES = [];     // admin: all profiles
+let EMPS = [];             // my employees (user view)
+let TEAM_EMPS = {};        // admin: owner id -> employees[]
+let currentTab = "";
+let viewingTeamId = null;
+let editingEmpId = null;
+let indState = {};
+let searchQ = "";
+
+/* =============== HELPERS =============== */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2400); }
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+function calcScore(e){ let n=INDICATORS.reduce((a,[k])=>a+((e.ind&&e.ind[k])==="YES"?1:0),0); if(e.cap==="YES")n++; return n; }
+function calcStatus(e){ if(e.attrition==="BLACK")return"BLACK"; const s=calcScore(e); return s===0?"GREEN":s<=3?"YELLOW":"RED"; }
+function statusBadge(st){ return `<span class="badge b-${st}">${STATUS_META[st].icon} ${st}</span>`; }
+function fmtDate(iso){ return iso? String(iso).slice(0,10):""; }
+
+/* =============== AUTH =============== */
+function showSignup(on){
+  document.getElementById("loginForm").style.display = on?"none":"block";
+  document.getElementById("signupForm").style.display = on?"block":"none";
+}
+async function doLogin(){
+  if(!CONFIGURED){ document.getElementById("loginErr").textContent="App not configured yet — see the yellow banner above."; return; }
+  const email=document.getElementById("loginEmail").value.trim();
+  const pass=document.getElementById("loginPass").value;
+  const err=document.getElementById("loginErr");
+  const btn=document.getElementById("loginBtn");
+  err.textContent=""; btn.disabled=true; btn.textContent="Signing in…";
+  const {error} = await sb.auth.signInWithPassword({email, password:pass});
+  btn.disabled=false; btn.textContent="Sign In";
+  if(error){ err.textContent=error.message; return; }
+  await enterApp();
+}
+async function doSignup(){
+  if(!CONFIGURED){ document.getElementById("signupErr").textContent="App not configured yet — see the yellow banner above."; return; }
+  const name=document.getElementById("suName").value.trim();
+  const email=document.getElementById("suEmail").value.trim();
+  const pass=document.getElementById("suPass").value;
+  const err=document.getElementById("signupErr");
+  const ok=document.getElementById("signupOk");
+  err.textContent=""; ok.textContent="";
+  if(!name||!email||!pass){ err.textContent="All fields are required."; return; }
+  const btn=document.getElementById("signupBtn");
+  btn.disabled=true; btn.textContent="Creating…";
+  const {data, error} = await sb.auth.signUp({email, password:pass, options:{data:{name}}});
+  btn.disabled=false; btn.textContent="Create Account";
+  if(error){ err.textContent=error.message; return; }
+  if(data.session){ await enterApp(); }
+  else{
+    ok.textContent="✅ Account created. If email confirmation is enabled, check your inbox first. Your account then waits for admin approval.";
+  }
+}
+async function doLogout(){
+  if(sb) await sb.auth.signOut();
+  PROFILE=null; viewingTeamId=null;
+  document.getElementById("appView").style.display="none";
+  document.getElementById("pendingView").style.display="none";
+  document.getElementById("loginView").style.display="flex";
+}
+
+/* =============== BOOT / ROUTING =============== */
+async function enterApp(){
+  const {data:{user}} = await sb.auth.getUser();
+  if(!user){ doLogout(); return; }
+  const {data:prof, error} = await sb.from("profiles").select("*").eq("id",user.id).single();
+  if(error||!prof){ toast("Could not load your profile. Did you run the setup SQL?"); doLogout(); return; }
+  PROFILE=prof;
+  document.getElementById("loginView").style.display="none";
+  if(prof.role!=="admin" && !prof.approved){
+    document.getElementById("pendingView").style.display="block";
+    return;
+  }
+  document.getElementById("pendingView").style.display="none";
+  document.getElementById("appView").style.display="block";
+  document.getElementById("whoAmI").innerHTML =
+    `${esc(prof.name||prof.email)} <span class="tag" style="background:rgba(255,255,255,.18);color:#fff">${prof.role==="admin"?"ADMIN":"TEAM LEAD"}</span>`;
+  buildTabs();
+  navigate(prof.role==="admin"?"dashboard":"myteam");
+}
+function buildTabs(){
+  const tabs = PROFILE.role==="admin"
+    ? [["dashboard","📊 Dashboard"],["users","👥 Users"],["settings","⚙️ Settings"]]
+    : [["myteam","📋 My Team"],["settings","⚙️ Settings"]];
+  document.getElementById("navTabs").innerHTML =
+    tabs.map(([id,lbl])=>`<button id="tab_${id}" onclick="navigate('${id}')">${lbl}</button>`).join("");
+}
+function navigate(tab){
+  currentTab=tab; if(tab!=="dashboard") viewingTeamId=null;
+  document.querySelectorAll("#navTabs button").forEach(b=>b.classList.remove("active"));
+  const btn=document.getElementById("tab_"+tab); if(btn) btn.classList.add("active");
+  render();
+}
+async function render(){
+  const el=document.getElementById("mainContent");
+  el.innerHTML=`<div class="loading">Loading…</div>`;
+  try{
+    if(PROFILE.role==="admin"){
+      if(currentTab==="dashboard"){ await loadAdminData(); el.innerHTML = viewingTeamId? renderTeamDrill() : renderDashboard(); }
+      else if(currentTab==="users"){ await loadAdminData(); el.innerHTML = renderUsers(); }
+      else el.innerHTML = renderSettings();
+    } else {
+      if(currentTab==="myteam"){ await loadMyEmployees(); el.innerHTML = renderTracker(PROFILE.id, EMPS, false); }
+      else el.innerHTML = renderSettings();
+    }
+  }catch(e){ el.innerHTML=`<div class="empty">⚠️ ${esc(e.message||"Failed to load data.")}</div>`; }
+}
+
+/* =============== DATA =============== */
+async function loadMyEmployees(){
+  const {data, error} = await sb.from("employees").select("*").eq("owner",PROFILE.id).order("name");
+  if(error) throw error;
+  EMPS = data||[];
+}
+async function loadAdminData(){
+  const [{data:profs, error:e1},{data:emps, error:e2}] = await Promise.all([
+    sb.from("profiles").select("*").order("created_at"),
+    sb.from("employees").select("*").order("name")
+  ]);
+  if(e1) throw e1; if(e2) throw e2;
+  ALL_PROFILES = profs||[];
+  TEAM_EMPS = {};
+  (emps||[]).forEach(e=>{ (TEAM_EMPS[e.owner]=TEAM_EMPS[e.owner]||[]).push(e); });
+}
+
+/* =============== ADMIN: DASHBOARD =============== */
+function teamStats(emps){
+  const c={GREEN:0,YELLOW:0,RED:0,BLACK:0}; let sum=0; const ic={};
+  emps.forEach(e=>{ c[calcStatus(e)]++; sum+=calcScore(e);
+    INDICATORS.forEach(([k,l])=>{ if(e.ind&&e.ind[k]==="YES") ic[l]=(ic[l]||0)+1; }); });
+  const total=emps.length;
+  const atRisk=total?Math.round((c.RED+c.BLACK)/total*100):0;
+  let top="—",tn=0; Object.entries(ic).forEach(([k,v])=>{if(v>tn){tn=v;top=k;}});
+  let prio="🟢 STABLE";
+  if(c.BLACK>0||atRisk>=25) prio="🔥 URGENT"; else if(c.RED>0) prio="⚠️ HIGH"; else if(c.YELLOW>0) prio="👀 MONITOR";
+  return {total,c,atRisk,avg:total?(sum/total).toFixed(1):"0.0",top,prio};
+}
+function renderDashboard(){
+  const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+  const pending = ALL_PROFILES.filter(p=>p.role!=="admin" && !p.approved).length;
+  let g={GREEN:0,YELLOW:0,RED:0,BLACK:0}, hc=0;
+  tls.forEach(p=>{ const s=teamStats(TEAM_EMPS[p.id]||[]); hc+=s.total; Object.keys(g).forEach(k=>g[k]+=s.c[k]); });
+  const rows = tls.map(p=>{
+    const s=teamStats(TEAM_EMPS[p.id]||[]);
+    return `<tr>
+      <td><b>${esc(p.name||p.email)}</b><br><span style="color:var(--muted);font-size:11.5px">${esc(p.email)}</span></td>
+      <td style="text-align:center">${s.total}</td>
+      <td style="text-align:center;color:var(--green);font-weight:700">${s.c.GREEN}</td>
+      <td style="text-align:center;color:var(--yellow);font-weight:700">${s.c.YELLOW}</td>
+      <td style="text-align:center;color:var(--red);font-weight:700">${s.c.RED}</td>
+      <td style="text-align:center;font-weight:700">${s.c.BLACK}</td>
+      <td style="text-align:center">${s.atRisk}%</td>
+      <td style="text-align:center">${s.avg}</td>
+      <td>${esc(s.top)}</td>
+      <td>${s.prio}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="drillTeam('${p.id}')">View Team →</button></td></tr>`;
+  }).join("");
+  return `
+  <h2 class="page-title">📊 Early Warning Signs — Operations Dashboard</h2>
+  ${pending? `<div class="setup-banner">⏳ <b>${pending} signup${pending===1?"":"s"}</b> waiting for approval — review in the <a style="cursor:pointer;text-decoration:underline" onclick="navigate('users')"><b>Users</b></a> tab.</div>`:""}
+  <div class="stats">
+    <div class="stat"><div class="num">${hc}</div><div class="lbl">Total Headcount</div></div>
+    <div class="stat s-green"><div class="num">${g.GREEN}</div><div class="lbl">🟢 Green</div></div>
+    <div class="stat s-yellow"><div class="num">${g.YELLOW}</div><div class="lbl">🟡 Yellow</div></div>
+    <div class="stat s-red"><div class="num">${g.RED}</div><div class="lbl">🔴 Red</div></div>
+    <div class="stat s-black"><div class="num">${g.BLACK}</div><div class="lbl">⚫ Black</div></div>
+    <div class="stat"><div class="num">${hc?Math.round((g.RED+g.BLACK)/hc*100):0}%</div><div class="lbl">% At Risk (Red+Black)</div></div>
+  </div>
+  <div class="card">
+    <h3>Team-Level Risk Summary</h3>
+    ${tls.length===0? `<div class="empty">No approved team leads yet. Approve signups in the <b>Users</b> tab.</div>`:`
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Team / User</th><th>Headcount</th><th>🟢</th><th>🟡</th><th>🔴</th><th>⚫</th><th>% At Risk</th><th>Avg Score</th><th>Top Indicator</th><th>Action Priority</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`}
+  </div>
+  <div class="card">
+    <h3>📋 Legend</h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Status</th><th>Meaning</th><th>Action Required</th></tr></thead>
+      <tbody>
+      <tr><td>${statusBadge("GREEN")}</td><td class="wrap">Employee is engaged and performing well.</td><td class="wrap">Continue regular check-ins and recognition.</td></tr>
+      <tr><td>${statusBadge("YELLOW")}</td><td class="wrap">Mild warning signs present (1–3 indicators).</td><td class="wrap">Schedule 1-on-1 coaching. Document observations.</td></tr>
+      <tr><td>${statusBadge("RED")}</td><td class="wrap">Multiple warning signs (4+ indicators). High flight risk.</td><td class="wrap">Immediate retention conversation. Escalate to HR if needed.</td></tr>
+      <tr><td>${statusBadge("BLACK")}</td><td class="wrap">Confirmed resignation or termination.</td><td class="wrap">Begin transition plan.</td></tr>
+      </tbody></table></div>
+  </div>`;
+}
+function drillTeam(id){ viewingTeamId=id; document.getElementById("mainContent").innerHTML=renderTeamDrill(); }
+function renderTeamDrill(){
+  const p=ALL_PROFILES.find(x=>x.id===viewingTeamId);
+  if(!p){ viewingTeamId=null; return renderDashboard(); }
+  return `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px" onclick="viewingTeamId=null;render()">← Back to Dashboard</button>
+  ${renderTracker(p.id, TEAM_EMPS[p.id]||[], true, p.name||p.email)}`;
+}
+
+/* =============== TRACKER =============== */
+function renderTracker(ownerId, allEmps, readOnly, ownerName){
+  const emps = allEmps.filter(e=>{
+    if(!searchQ) return true; const q=searchQ.toLowerCase();
+    return (e.name||"").toLowerCase().includes(q)||(e.empid||"").toLowerCase().includes(q)||(e.pos||"").toLowerCase().includes(q);
+  });
+  const c={GREEN:0,YELLOW:0,RED:0,BLACK:0};
+  allEmps.forEach(e=>c[calcStatus(e)]++);
+  const indHeads=INDICATORS.map(([,l])=>`<th>${esc(l)}</th>`).join("");
+  const rows=emps.map((e,i)=>{
+    const st=calcStatus(e), sc=calcScore(e);
+    const scBg = st==="GREEN"?"var(--green-bg)":st==="YELLOW"?"var(--yellow-bg)":st==="RED"?"var(--red-bg)":"var(--black-bg)";
+    const indCells=INDICATORS.map(([k])=>`<td style="text-align:center" class="${(e.ind&&e.ind[k])==="YES"?"yn-yes":"yn-no"}">${(e.ind&&e.ind[k])||"NO"}</td>`).join("");
+    return `<tr>
+      <td>${i+1}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.empid)}</td><td>${esc(e.pos)}</td><td>${esc(e.hired)}</td>
+      <td>${statusBadge(st)}</td>${indCells}
+      <td style="text-align:center" class="${e.cap==="YES"?"yn-yes":"yn-no"}">${e.cap||"NO"}</td>
+      <td style="text-align:center"><span class="score-pill" style="background:${scBg}">${sc}</span></td>
+      <td>${esc(e.rating)}</td><td class="wrap">${esc(e.notes)}</td><td>${fmtDate(e.updated_at)}</td>
+      ${readOnly?"":`<td class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openEmpModal('${e.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}</tr>`;
+  }).join("");
+  return `
+  <h2 class="page-title">🔍 Early Warning Signs Tracker — ${esc(ownerName || PROFILE.name || PROFILE.email)}</h2>
+  <div class="stats">
+    <div class="stat"><div class="num">${allEmps.length}</div><div class="lbl">Team Headcount</div></div>
+    <div class="stat s-green"><div class="num">${c.GREEN}</div><div class="lbl">🟢 Green</div></div>
+    <div class="stat s-yellow"><div class="num">${c.YELLOW}</div><div class="lbl">🟡 Yellow</div></div>
+    <div class="stat s-red"><div class="num">${c.RED}</div><div class="lbl">🔴 Red</div></div>
+    <div class="stat s-black"><div class="num">${c.BLACK}</div><div class="lbl">⚫ Black</div></div>
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      <input type="text" placeholder="🔎 Search name, ID, position…" value="${esc(searchQ)}" oninput="searchQ=this.value;refreshTable('${ownerId}',${readOnly})">
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV('${ownerId}')">⬇ Export CSV</button>
+      ${readOnly?"":`<button class="btn btn-primary btn-sm" onclick="openEmpModal()">＋ Add Employee</button>`}
+    </div>
+    ${allEmps.length===0? `<div class="empty">No employees yet.${readOnly?"":" Click <b>＋ Add Employee</b> to start tracking."}</div>`:`
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th>Employee Name</th><th>Employee ID</th><th>Position</th><th>Date Hired</th><th>Risk Status</th>
+      ${indHeads}<th>With Active CAP?</th><th>Risk Score</th><th>Rating (Last 3 Mo.)</th><th>TL Notes</th><th>Last Updated</th>${readOnly?"":"<th>Actions</th>"}</tr></thead>
+      <tbody>${rows}</tbody></table></div>`}
+  </div>`;
+}
+function refreshTable(ownerId, readOnly){
+  const emps = readOnly? (TEAM_EMPS[ownerId]||[]) : EMPS;
+  const p = readOnly? ALL_PROFILES.find(x=>x.id===ownerId) : null;
+  const html = renderTracker(ownerId, emps, readOnly, p?(p.name||p.email):null);
+  const wrap=document.getElementById("mainContent");
+  wrap.innerHTML = (readOnly? `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px" onclick="viewingTeamId=null;render()">← Back to Dashboard</button>`:"") + html;
+  const inp=wrap.querySelector(".toolbar input"); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+}
+
+/* =============== EMPLOYEE CRUD =============== */
+function openEmpModal(empId){
+  editingEmpId=empId||null;
+  const e = empId? EMPS.find(x=>x.id===empId) : null;
+  document.getElementById("empModalTitle").textContent=e?"Edit Employee":"Add Employee";
+  document.getElementById("f_name").value=e?e.name:"";
+  document.getElementById("f_empid").value=e?e.empid:"";
+  document.getElementById("f_pos").value=e?e.pos:"";
+  document.getElementById("f_hired").value=e?(e.hired||""):"";
+  document.getElementById("f_cap").value=e?(e.cap||"NO"):"NO";
+  document.getElementById("f_rating").value=e?(e.rating||""):"";
+  document.getElementById("f_attrition").value=e?(e.attrition||""):"";
+  document.getElementById("f_notes").value=e?(e.notes||""):"";
+  indState={}; INDICATORS.forEach(([k])=>{ indState[k]= e&&e.ind? (e.ind[k]||"NO"):"NO"; });
+  drawIndGrid(); updatePreview();
+  document.getElementById("empModalBg").classList.add("open");
+}
+function drawIndGrid(){
+  document.getElementById("indGrid").innerHTML=INDICATORS.map(([k,lbl])=>`
+    <div class="ind"><span>${esc(lbl)}</span>
+      <span class="switch">
+        <button class="${indState[k]==="YES"?"on-yes":""}" onclick="setInd('${k}','YES')">YES</button>
+        <button class="${indState[k]==="NO"?"on-no":""}" onclick="setInd('${k}','NO')">NO</button>
+      </span></div>`).join("");
+}
+function setInd(k,v){ indState[k]=v; drawIndGrid(); updatePreview(); }
+function updatePreview(){
+  const fake={ind:indState, cap:document.getElementById("f_cap").value, attrition:document.getElementById("f_attrition").value};
+  const sc=calcScore(fake), st=calcStatus(fake);
+  document.getElementById("prevScore").textContent=sc;
+  document.getElementById("prevStatus").outerHTML=`<span id="prevStatus" class="badge b-${st}">${STATUS_META[st].icon} ${st}</span>`;
+}
+async function saveEmployee(){
+  const name=document.getElementById("f_name").value.trim();
+  const empid=document.getElementById("f_empid").value.trim();
+  if(!name||!empid){ toast("Employee Name and Employee ID are required."); return; }
+  const row={
+    owner:PROFILE.id, name, empid,
+    pos:document.getElementById("f_pos").value.trim(),
+    hired:document.getElementById("f_hired").value,
+    ind:{...indState},
+    cap:document.getElementById("f_cap").value,
+    rating:document.getElementById("f_rating").value.trim(),
+    attrition:document.getElementById("f_attrition").value,
+    notes:document.getElementById("f_notes").value.trim(),
+    updated_at:new Date().toISOString()
+  };
+  const btn=document.getElementById("saveEmpBtn");
+  btn.disabled=true; btn.textContent="Saving…";
+  let error;
+  if(editingEmpId) ({error} = await sb.from("employees").update(row).eq("id",editingEmpId));
+  else ({error} = await sb.from("employees").insert(row));
+  btn.disabled=false; btn.textContent="Save Employee";
+  if(error){ toast("Save failed: "+error.message); return; }
+  closeModal("empModalBg");
+  toast(editingEmpId?"Employee updated ✓ saved to cloud":"Employee added ✓ saved to cloud");
+  render();
+}
+async function deleteEmployee(id){
+  if(!confirm("Delete this employee record?")) return;
+  const {error} = await sb.from("employees").delete().eq("id",id);
+  if(error){ toast("Delete failed: "+error.message); return; }
+  toast("Employee deleted."); render();
+}
+
+/* =============== ADMIN: USERS =============== */
+function renderUsers(){
+  const others=ALL_PROFILES.filter(p=>p.role!=="admin");
+  const rows=others.map(p=>{
+    const n=(TEAM_EMPS[p.id]||[]).length;
+    const initials=(p.name||p.email).split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+    return `<div class="user-row">
+      <div class="avatar">${esc(initials)}</div>
+      <div><div class="uname">${esc(p.name||p.email)} ${p.approved?`<span class="tag tag-ok">APPROVED</span>`:`<span class="tag tag-pending">PENDING</span>`}</div>
+      <div class="usub">${esc(p.email)} · ${n} employee${n===1?"":"s"} tracked · joined ${fmtDate(p.created_at)}</div></div>
+      <div class="spacer"></div>
+      ${p.approved
+        ? `<button class="btn btn-ghost btn-sm" onclick="setApproval('${p.id}',false)">Revoke access</button>`
+        : `<button class="btn btn-green btn-sm" onclick="setApproval('${p.id}',true)">✓ Approve</button>`}
+      <button class="btn btn-danger btn-sm" onclick="removeUser('${p.id}')">Remove</button>
+    </div>`;
+  }).join("");
+  return `
+  <h2 class="page-title">👥 User Management</h2>
+  <div class="card">
+    <h3>Accounts (${others.length})</h3>
+    ${others.length===0? `<div class="empty">No signups yet. Share the app link — new users appear here for approval.</div>` : rows}
+  </div>
+  <div class="card" style="max-width:640px">
+    <p style="font-size:12.5px;color:var(--muted)">Note: “Remove” deletes the user's profile and all their employee records. Their login credential itself can be fully deleted in Supabase Dashboard → Authentication → Users.</p>
+  </div>`;
+}
+async function setApproval(id, approved){
+  const {error} = await sb.from("profiles").update({approved}).eq("id",id);
+  if(error){ toast("Failed: "+error.message); return; }
+  toast(approved?"User approved ✓":"Access revoked."); render();
+}
+async function removeUser(id){
+  const p=ALL_PROFILES.find(x=>x.id===id); if(!p) return;
+  if(!confirm(`Remove "${p.name||p.email}" and delete their ${(TEAM_EMPS[id]||[]).length} employee record(s)?`)) return;
+  const {error} = await sb.from("profiles").delete().eq("id",id);
+  if(error){ toast("Failed: "+error.message); return; }
+  toast("User removed."); render();
+}
+
+/* =============== SETTINGS =============== */
+function renderSettings(){
+  return `
+  <h2 class="page-title">⚙️ Settings</h2>
+  <div class="card" style="max-width:520px">
+    <h3>Change My Password</h3>
+    <div class="field"><label>New Password</label><input id="cp_new" type="password" placeholder="Min. 6 characters"></div>
+    <button class="btn btn-primary btn-sm" onclick="changePass()">Update Password</button>
+  </div>
+  <div class="card" style="max-width:520px">
+    <h3>Account</h3>
+    <p style="font-size:13px;color:var(--muted)">Signed in as <b>${esc(PROFILE.email)}</b> (${PROFILE.role}). All entries save to the cloud automatically — log in from any device to see your data.</p>
+  </div>`;
+}
+async function changePass(){
+  const n=document.getElementById("cp_new").value;
+  if(!n||n.length<6){ toast("Password must be at least 6 characters."); return; }
+  const {error} = await sb.auth.updateUser({password:n});
+  if(error){ toast("Failed: "+error.message); return; }
+  document.getElementById("cp_new").value=""; toast("Password updated ✓");
+}
+
+/* =============== CSV EXPORT =============== */
+function exportCSV(ownerId){
+  const emps = PROFILE.role==="admin" && ownerId!==PROFILE.id ? (TEAM_EMPS[ownerId]||[]) : EMPS;
+  const p = ALL_PROFILES.find(x=>x.id===ownerId);
+  const teamName = p? (p.name||p.email) : (PROFILE.name||PROFILE.email);
+  const head=["#","Employee Name","Employee ID","Position","Date Hired","Risk Status",
+    ...INDICATORS.map(([,l])=>l),"With Active CAP?","Risk Score","Rating (Last 3 Mo.)","TL Notes","Last Updated"];
+  const lines=[head.map(csvCell).join(",")];
+  emps.forEach((e,i)=>{
+    lines.push([i+1,e.name,e.empid,e.pos,e.hired,calcStatus(e),
+      ...INDICATORS.map(([k])=>(e.ind&&e.ind[k])||"NO"), e.cap||"NO", calcScore(e), e.rating, e.notes, fmtDate(e.updated_at)
+    ].map(csvCell).join(","));
+  });
+  const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="EWS_"+String(teamName).replace(/\W+/g,"_")+".csv"; a.click();
+}
+function csvCell(v){ v=String(v==null?"":v); return /[",\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+
+/* =============== INIT =============== */
+if(!CONFIGURED) document.getElementById("setupBanner").style.display="block";
+document.getElementById("loginPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
+document.getElementById("suPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doSignup(); });
+(async ()=>{
+  if(!CONFIGURED) return;
+  const {data:{session}} = await sb.auth.getSession();
+  if(session) await enterApp();
+})();
+</script>
+</body>
+</html>
