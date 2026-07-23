@@ -356,14 +356,17 @@ function showSignup(on){
 }
 async function doLogin(){
   if(!CONFIGURED){ document.getElementById("loginErr").textContent="App not configured yet — see the yellow banner above."; return; }
-  const uname=sanitizeUsername(document.getElementById("loginUsername").value);
+  const raw=document.getElementById("loginUsername").value.trim();
   const pass=document.getElementById("loginPass").value;
   const err=document.getElementById("loginErr");
   const btn=document.getElementById("loginBtn");
   err.textContent="";
-  if(!uname||!pass){ err.textContent="Enter your username and password."; return; }
+  if(!raw||!pass){ err.textContent="Enter your username and password."; return; }
+  // legacy accounts created before the username switch log in with their original email;
+  // everyone else logs in with their username, mapped to the internal synthetic address.
+  const loginEmail = raw.includes("@") ? raw : usernameToEmail(sanitizeUsername(raw));
   btn.disabled=true; btn.textContent="Signing in…";
-  const {error} = await sb.auth.signInWithPassword({email:usernameToEmail(uname), password:pass});
+  const {error} = await sb.auth.signInWithPassword({email:loginEmail, password:pass});
   btn.disabled=false; btn.textContent="Sign In";
   if(error){ err.textContent = /invalid/i.test(error.message)? "Incorrect username or password." : error.message; return; }
   await enterApp();
