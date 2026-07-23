@@ -254,7 +254,11 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
         <select id="f_cap" onchange="updatePreview()"><option>NO</option><option>YES</option></select></div>
       <div class="field"><label>Rating (Last 3 Mo.)</label><input id="f_rating" placeholder="e.g. 4.2 / Meets"></div>
       <div class="field"><label>Confirmed Attrition?</label>
-        <select id="f_attrition" onchange="updatePreview()"><option value="">No — auto status</option><option value="BLACK">⚫ Yes — mark BLACK</option></select></div>
+        <select id="f_attrition" onchange="updatePreview();toggleAttritionDate()"><option value="">No — auto status</option><option value="BLACK">⚫ Yes — mark BLACK</option></select></div>
+    </div>
+    <div class="field" id="f_attrition_date_wrap" style="display:none;max-width:240px">
+      <label>Attrition Date</label><input id="f_attrition_date" type="date">
+      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">This employee will move from the active roster to Permanent Attrition. Leave blank to default to today.</p>
     </div>
     <div class="field"><label>TL Notes</label><textarea id="f_notes" rows="2" placeholder="Observations, coaching actions, retention conversations…"></textarea></div>
     <div class="score-preview">
@@ -427,8 +431,8 @@ async function enterApp(){
 }
 function buildTabs(){
   const tabs = PROFILE.role==="admin"
-    ? [["dashboard","📊 Dashboard"],["headcount","📈 Headcount"],["performer","🚦 Performer"],["users","👥 Users"],["settings","⚙️ Settings"]]
-    : [["myteam","📋 My Team"],["headcount","📈 Headcount"],["settings","⚙️ Settings"]];
+    ? [["dashboard","📊 Dashboard"],["headcount","📈 Headcount"],["attrition","⚫ Permanent Attrition"],["performer","🚦 Performer"],["users","👥 Users"],["settings","⚙️ Settings"]]
+    : [["myteam","📋 My Team"],["headcount","📈 Headcount"],["attrition","⚫ Permanent Attrition"],["settings","⚙️ Settings"]];
   document.getElementById("navTabs").innerHTML =
     tabs.map(([id,lbl])=>`<button id="tab_${id}" onclick="navigate('${id}')">${lbl}</button>`).join("");
 }
@@ -445,12 +449,14 @@ async function render(){
     if(PROFILE.role==="admin"){
       if(currentTab==="dashboard"){ await loadAdminData(); el.innerHTML = viewingTeamId? renderTeamDrill() : renderDashboard(); }
       else if(currentTab==="headcount"){ await loadAdminData(); await loadHc(true); el.innerHTML = renderHeadcount(); }
+      else if(currentTab==="attrition"){ await loadAdminData(); el.innerHTML = renderAttrition(true); }
       else if(currentTab==="performer"){ await loadAdminData(); el.innerHTML = renderPerformer(); }
       else if(currentTab==="users"){ await loadAdminData(); el.innerHTML = renderUsers(); }
       else el.innerHTML = renderSettings();
     } else {
       if(currentTab==="myteam"){ await loadMyEmployees(); el.innerHTML = renderTracker(PROFILE.id, EMPS, false); }
       else if(currentTab==="headcount"){ await loadHc(false); el.innerHTML = renderHeadcount(); }
+      else if(currentTab==="attrition"){ await loadMyEmployees(); el.innerHTML = renderAttrition(false); }
       else el.innerHTML = renderSettings();
     }
   }catch(e){ el.innerHTML=`<div class="empty">⚠️ ${esc(e.message||"Failed to load data.")}</div>`; }
@@ -475,15 +481,17 @@ async function loadAdminData(){
 
 /* =============== ADMIN: DASHBOARD =============== */
 function teamStats(emps){
-  const c={GREEN:0,YELLOW:0,RED:0,BLACK:0}; let sum=0; const ic={};
-  emps.forEach(e=>{ c[calcStatus(e)]++; sum+=calcScore(e);
+  const active = emps.filter(e=>e.attrition!=="BLACK");
+  const attritted = emps.length - active.length;
+  const c={GREEN:0,YELLOW:0,RED:0}; let sum=0; const ic={};
+  active.forEach(e=>{ c[calcStatus(e)]++; sum+=calcScore(e);
     INDICATORS.forEach(([k,l])=>{ if(e.ind&&e.ind[k]==="YES") ic[l]=(ic[l]||0)+1; }); });
-  const total=emps.length;
-  const atRisk=total?Math.round((c.RED+c.BLACK)/total*100):0;
+  const total=active.length;
+  const atRisk=total?Math.round(c.RED/total*100):0;
   let top="—",tn=0; Object.entries(ic).forEach(([k,v])=>{if(v>tn){tn=v;top=k;}});
   let prio="🟢 STABLE";
-  if(c.BLACK>0||atRisk>=25) prio="🔥 URGENT"; else if(c.RED>0) prio="⚠️ HIGH"; else if(c.YELLOW>0) prio="👀 MONITOR";
-  return {total,c,atRisk,avg:total?(sum/total).toFixed(1):"0.0",top,prio};
+  if(atRisk>=25) prio="🔥 URGENT"; else if(c.RED>0) prio="⚠️ HIGH"; else if(c.YELLOW>0) prio="👀 MONITOR";
+  return {total,c:{...c,BLACK:attritted},atRisk,avg:total?(sum/total).toFixed(1):"0.0",top,prio,attritted};
 }
 function renderDashboard(){
   const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
@@ -509,18 +517,18 @@ function renderDashboard(){
   <h2 class="page-title">📊 Early Warning Signs — Operations Dashboard</h2>
   ${pending? `<div class="setup-banner">⏳ <b>${pending} signup${pending===1?"":"s"}</b> waiting for approval — review in the <a style="cursor:pointer;text-decoration:underline" onclick="navigate('users')"><b>Users</b></a> tab.</div>`:""}
   <div class="stats">
-    <div class="stat"><div class="num">${hc}</div><div class="lbl">Total Headcount</div></div>
+    <div class="stat"><div class="num">${hc}</div><div class="lbl">Active Headcount</div></div>
     <div class="stat s-green"><div class="num">${g.GREEN}</div><div class="lbl">🟢 Green</div></div>
     <div class="stat s-yellow"><div class="num">${g.YELLOW}</div><div class="lbl">🟡 Yellow</div></div>
     <div class="stat s-red"><div class="num">${g.RED}</div><div class="lbl">🔴 Red</div></div>
-    <div class="stat s-black"><div class="num">${g.BLACK}</div><div class="lbl">⚫ Black</div></div>
-    <div class="stat"><div class="num">${hc?Math.round((g.RED+g.BLACK)/hc*100):0}%</div><div class="lbl">% At Risk (Red+Black)</div></div>
+    <div class="stat s-black"><div class="num">${g.BLACK}</div><div class="lbl">⚫ Permanent Attrition</div></div>
+    <div class="stat"><div class="num">${hc?Math.round(g.RED/hc*100):0}%</div><div class="lbl">% At Risk (Red)</div></div>
   </div>
   <div class="card">
     <h3>Team-Level Risk Summary</h3>
     ${tls.length===0? `<div class="empty">No approved team leads yet. Approve signups in the <b>Users</b> tab.</div>`:`
     <div class="tbl-wrap"><table class="fit">
-      <thead><tr><th>Team / User</th><th>Headcount</th><th>🟢</th><th>🟡</th><th>🔴</th><th>⚫</th><th>% At Risk</th><th>Avg Score</th><th>Top Indicator</th><th>Action Priority</th><th></th></tr></thead>
+      <thead><tr><th>Team / User</th><th>Active HC</th><th>🟢</th><th>🟡</th><th>🔴</th><th>⚫ Attrition</th><th>% At Risk</th><th>Avg Score</th><th>Top Indicator</th><th>Action Priority</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`}
   </div>
   <div class="card">
@@ -546,7 +554,9 @@ function renderTeamDrill(){
 }
 
 /* =============== TRACKER =============== */
-function renderTracker(ownerId, allEmps, readOnly, ownerName){
+function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
+  const attrittedCount = allEmpsRaw.filter(e=>e.attrition==="BLACK").length;
+  const allEmps = allEmpsRaw.filter(e=>e.attrition!=="BLACK");
   const emps = allEmps.filter(e=>{
     if(!searchQ) return true; const q=searchQ.toLowerCase();
     return (e.name||"").toLowerCase().includes(q)||(e.empid||"").toLowerCase().includes(q)||(e.pos||"").toLowerCase().includes(q);
@@ -575,7 +585,7 @@ function renderTracker(ownerId, allEmps, readOnly, ownerName){
     <div class="stat s-green"><div class="num">${c.GREEN}</div><div class="lbl">🟢 Green</div></div>
     <div class="stat s-yellow"><div class="num">${c.YELLOW}</div><div class="lbl">🟡 Yellow</div></div>
     <div class="stat s-red"><div class="num">${c.RED}</div><div class="lbl">🔴 Red</div></div>
-    <div class="stat s-black"><div class="num">${c.BLACK}</div><div class="lbl">⚫ Black</div></div>
+    <div class="stat s-black"><div class="num">${attrittedCount}</div><div class="lbl">⚫ Permanent Attrition</div></div>
   </div>
   <div class="card">
     <div class="toolbar">
@@ -618,10 +628,15 @@ function openEmpModal(empId){
   document.getElementById("f_cap").value=e?(e.cap||"NO"):"NO";
   document.getElementById("f_rating").value=e?(e.rating||""):"";
   document.getElementById("f_attrition").value=e?(e.attrition||""):"";
+  document.getElementById("f_attrition_date").value=e?(e.attrition_date||""):"";
   document.getElementById("f_notes").value=e?(e.notes||""):"";
   indState={}; INDICATORS.forEach(([k])=>{ indState[k]= e&&e.ind? (e.ind[k]||"NO"):"NO"; });
-  drawIndGrid(); updatePreview();
+  drawIndGrid(); updatePreview(); toggleAttritionDate();
   document.getElementById("empModalBg").classList.add("open");
+}
+function toggleAttritionDate(){
+  const on = document.getElementById("f_attrition").value === "BLACK";
+  document.getElementById("f_attrition_date_wrap").style.display = on? "block":"none";
 }
 function drawIndGrid(){
   document.getElementById("indGrid").innerHTML=INDICATORS.map(([k,lbl])=>`
@@ -642,6 +657,8 @@ async function saveEmployee(){
   const name=document.getElementById("f_name").value.trim();
   const empid=document.getElementById("f_empid").value.trim();
   if(!name||!empid){ toast("Employee Name and Employee ID are required."); return; }
+  const attrition = document.getElementById("f_attrition").value;
+  const attrDateRaw = document.getElementById("f_attrition_date").value;
   const row={
     owner:PROFILE.id, name, empid,
     pos:document.getElementById("f_pos").value.trim(),
@@ -649,7 +666,8 @@ async function saveEmployee(){
     ind:{...indState},
     cap:document.getElementById("f_cap").value,
     rating:document.getElementById("f_rating").value.trim(),
-    attrition:document.getElementById("f_attrition").value,
+    attrition,
+    attrition_date: attrition==="BLACK" ? (attrDateRaw || new Date().toISOString().slice(0,10)) : null,
     notes:document.getElementById("f_notes").value.trim(),
     updated_at:new Date().toISOString()
   };
@@ -661,7 +679,7 @@ async function saveEmployee(){
   btn.disabled=false; btn.textContent="Save Employee";
   if(error){ toast("Save failed: "+error.message); return; }
   closeModal("empModalBg");
-  toast(editingEmpId?"Employee updated ✓ saved to cloud":"Employee added ✓ saved to cloud");
+  toast(attrition==="BLACK" ? "Employee moved to Permanent Attrition ✓" : (editingEmpId?"Employee updated ✓ saved to cloud":"Employee added ✓ saved to cloud"));
   render();
 }
 async function deleteEmployee(id){
@@ -722,6 +740,7 @@ async function uploadEmpExcel(input){
         cap: normYN(keyOf(row,"With Active CAP")),
         rating: String(keyOf(row,"Rating")||"").trim(),
         attrition: (attritionRaw==="YES"||attritionRaw==="BLACK")? "BLACK" : "",
+        attrition_date: (attritionRaw==="YES"||attritionRaw==="BLACK")? new Date().toISOString().slice(0,10) : null,
         notes: String(keyOf(row,"TL Notes")||"").trim(),
         updated_at: new Date().toISOString()
       });
@@ -932,12 +951,87 @@ async function deleteHc(){
   closeModal("hcModalBg"); toast("Entry deleted."); render();
 }
 
+/* =============== PERMANENT ATTRITION =============== */
+let ATTR_TEAM = "all";
+function renderAttrition(isAdmin){
+  let list, teamSel="";
+  if(isAdmin){
+    const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+    teamSel = `<select id="attrTeamSel" onchange="ATTR_TEAM=this.value;render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">
+      <option value="all" ${ATTR_TEAM==="all"?"selected":""}>All Teams</option>
+      ${tls.map(p=>`<option value="${p.id}" ${ATTR_TEAM===p.id?"selected":""}>${esc(p.name||displayHandle(p))}</option>`).join("")}
+    </select>`;
+    if(ATTR_TEAM==="all"){
+      list = [];
+      tls.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition==="BLACK").forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
+    } else {
+      const p = ALL_PROFILES.find(x=>x.id===ATTR_TEAM);
+      list = (TEAM_EMPS[ATTR_TEAM]||[]).filter(e=>e.attrition==="BLACK").map(e=>({...e, _team:p?(p.name||displayHandle(p)):"Team"}));
+    }
+  } else {
+    list = EMPS.filter(e=>e.attrition==="BLACK");
+  }
+  list.sort((a,b)=> new Date(b.attrition_date||b.updated_at) - new Date(a.attrition_date||a.updated_at));
+  const showTeamCol = isAdmin && ATTR_TEAM==="all";
+  const rows = list.map((e,i)=>`<tr>
+    <td>${i+1}</td>
+    <td><b>${esc(e.name)}</b></td>
+    <td>${esc(e.empid)}</td>
+    ${showTeamCol? `<td>${esc(e._team||"")}</td>`:""}
+    <td>${esc(e.pos)}</td>
+    <td>${esc(e.hired)}</td>
+    <td>${fmtDate(e.attrition_date)||"—"}</td>
+    <td><span class="score-pill" style="background:var(--black-bg)">${calcScore(e)}</span></td>
+    <td>${esc(e.rating)}</td>
+    <td class="wrap">${esc(e.notes)}</td>
+    ${isAdmin?"":`<td class="row-actions">
+        <button class="btn btn-ghost btn-sm" title="Edit / Restore to active roster" onclick="openEmpModal('${e.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}
+  </tr>`).join("");
+  return `
+  <h2 class="page-title">⚫ Permanent Attrition ${isAdmin? "Register — All Teams" : "— "+esc(PROFILE.name||displayHandle(PROFILE))}</h2>
+  <div class="stats">
+    <div class="stat s-black"><div class="num">${list.length}</div><div class="lbl">⚫ Confirmed Attritions</div></div>
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      ${teamSel}
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" onclick="exportAttritionCSV(${isAdmin})">⬇ Export CSV</button>
+    </div>
+    ${list.length===0? `<div class="empty">No permanent attritions recorded${isAdmin&&ATTR_TEAM!=="all"?" for this team":""} yet. Mark an employee's <b>Confirmed Attrition?</b> as Yes in their tracker entry to move them here.</div>`:`
+    <div class="tbl-wrap"><table class="fit">
+      <thead><tr><th>#</th><th>Employee Name</th><th>Employee ID</th>${showTeamCol?"<th>Team</th>":""}<th>Position</th><th>Date Hired</th><th>Attrition Date</th><th>Last Risk Score</th><th>Rating (Last 3 Mo.)</th><th>TL Notes</th>${isAdmin?"":"<th>Actions</th>"}</tr></thead>
+      <tbody>${rows}</tbody></table></div>`}
+    ${isAdmin?"":`<p style="font-size:12px;color:var(--muted);margin-top:10px">To bring someone back to your active roster, edit their entry and change <b>Confirmed Attrition?</b> back to "No".</p>`}
+  </div>`;
+}
+function exportAttritionCSV(isAdmin){
+  let list;
+  if(isAdmin){
+    list = [];
+    const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+    const scope = ATTR_TEAM==="all"? tls : tls.filter(p=>p.id===ATTR_TEAM);
+    scope.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition==="BLACK").forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
+  } else {
+    list = EMPS.filter(e=>e.attrition==="BLACK");
+  }
+  const head=["#","Employee Name","Employee ID", ...(isAdmin?["Team"]:[]), "Position","Date Hired","Attrition Date","Last Risk Score","Rating (Last 3 Mo.)","TL Notes"];
+  const lines=[head.map(csvCell).join(",")];
+  list.forEach((e,i)=>{
+    lines.push([i+1, e.name, e.empid, ...(isAdmin?[e._team||""]:[]), e.pos, e.hired, fmtDate(e.attrition_date), calcScore(e), e.rating, e.notes].map(csvCell).join(","));
+  });
+  const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="Permanent_Attrition"+(isAdmin?"_AllTeams":"_"+String(PROFILE.name||displayHandle(PROFILE)).replace(/\W+/g,"_"))+".csv"; a.click();
+}
+
 /* =============== ADMIN: PERFORMER =============== */
 function renderPerformer(){
   const now=Date.now();
   const tls=ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
   const items=tls.map(p=>{
-    const emps=TEAM_EMPS[p.id]||[];
+    const emps=(TEAM_EMPS[p.id]||[]).filter(e=>e.attrition!=="BLACK");
     if(emps.length===0) return {p, n:0, avg:null, last:null};
     const ages=emps.map(e=>(now-new Date(e.updated_at).getTime())/86400000);
     const avg=ages.reduce((a,b)=>a+b,0)/ages.length;
