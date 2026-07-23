@@ -191,7 +191,7 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
 
     <!-- LOGIN FORM -->
     <div id="loginForm">
-      <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" placeholder="you@example.com"></div>
+      <div class="field"><label>Username</label><input id="loginUsername" type="text" autocomplete="username" placeholder="e.g. aida.rodriguez"></div>
       <div class="field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" placeholder="Your password"></div>
       <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Sign In</button>
       <div class="err" id="loginErr"></div>
@@ -201,7 +201,7 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
     <!-- SIGNUP FORM -->
     <div id="signupForm" style="display:none">
       <div class="field"><label>Full Name / Team Label</label><input id="suName" placeholder="e.g. Aida Marie Rodriguez"></div>
-      <div class="field"><label>Email</label><input id="suEmail" type="email" placeholder="you@example.com"></div>
+      <div class="field"><label>Username</label><input id="suUsername" type="text" placeholder="e.g. aida.rodriguez"></div>
       <div class="field"><label>Password</label><input id="suPass" type="password" placeholder="Min. 6 characters"></div>
       <button class="btn btn-primary" id="signupBtn" onclick="doSignup()">Create Account</button>
       <div class="err" id="signupErr"></div>
@@ -345,39 +345,54 @@ function statusBadge(st){ return `<span class="badge b-${st}">${STATUS_META[st].
 function fmtDate(iso){ return iso? String(iso).slice(0,10):""; }
 
 /* =============== AUTH =============== */
+const USERNAME_DOMAIN = "ews-tracker.local";
+function sanitizeUsername(u){ return String(u||"").trim().toLowerCase().replace(/[^a-z0-9._-]/g,""); }
+function usernameToEmail(u){ return sanitizeUsername(u)+"@"+USERNAME_DOMAIN; }
+function displayHandle(p){ return p&&p.username? p.username : (p&&p.email? p.email.split("@")[0] : ""); }
+
 function showSignup(on){
   document.getElementById("loginForm").style.display = on?"none":"block";
   document.getElementById("signupForm").style.display = on?"block":"none";
 }
 async function doLogin(){
   if(!CONFIGURED){ document.getElementById("loginErr").textContent="App not configured yet — see the yellow banner above."; return; }
-  const email=document.getElementById("loginEmail").value.trim();
+  const uname=sanitizeUsername(document.getElementById("loginUsername").value);
   const pass=document.getElementById("loginPass").value;
   const err=document.getElementById("loginErr");
   const btn=document.getElementById("loginBtn");
-  err.textContent=""; btn.disabled=true; btn.textContent="Signing in…";
-  const {error} = await sb.auth.signInWithPassword({email, password:pass});
+  err.textContent="";
+  if(!uname||!pass){ err.textContent="Enter your username and password."; return; }
+  btn.disabled=true; btn.textContent="Signing in…";
+  const {error} = await sb.auth.signInWithPassword({email:usernameToEmail(uname), password:pass});
   btn.disabled=false; btn.textContent="Sign In";
-  if(error){ err.textContent=error.message; return; }
+  if(error){ err.textContent = /invalid/i.test(error.message)? "Incorrect username or password." : error.message; return; }
   await enterApp();
 }
 async function doSignup(){
   if(!CONFIGURED){ document.getElementById("signupErr").textContent="App not configured yet — see the yellow banner above."; return; }
   const name=document.getElementById("suName").value.trim();
-  const email=document.getElementById("suEmail").value.trim();
+  const unameRaw=document.getElementById("suUsername").value.trim();
+  const uname=sanitizeUsername(unameRaw);
   const pass=document.getElementById("suPass").value;
   const err=document.getElementById("signupErr");
   const ok=document.getElementById("signupOk");
   err.textContent=""; ok.textContent="";
-  if(!name||!email||!pass){ err.textContent="All fields are required."; return; }
+  if(!name||!unameRaw||!pass){ err.textContent="All fields are required."; return; }
+  if(uname.length<3){ err.textContent="Username must be at least 3 characters (letters, numbers, dots, dashes, underscores)."; return; }
   const btn=document.getElementById("signupBtn");
   btn.disabled=true; btn.textContent="Creating…";
-  const {data, error} = await sb.auth.signUp({email, password:pass, options:{data:{name}}});
+  const {data, error} = await sb.auth.signUp({
+    email: usernameToEmail(uname), password:pass, options:{data:{name, username:uname}}
+  });
   btn.disabled=false; btn.textContent="Create Account";
-  if(error){ err.textContent=error.message; return; }
+  if(error){
+    err.textContent = /already registered|already exists/i.test(error.message)
+      ? "That username is already taken." : error.message;
+    return;
+  }
   if(data.session){ await enterApp(); }
   else{
-    ok.textContent="✅ Account created. If email confirmation is enabled, check your inbox first. Your account then waits for admin approval.";
+    ok.textContent="✅ Account created. Your account now waits for admin approval — you'll be able to log in once approved.";
   }
 }
 async function doLogout(){
@@ -403,7 +418,7 @@ async function enterApp(){
   document.getElementById("pendingView").style.display="none";
   document.getElementById("appView").style.display="block";
   document.getElementById("whoAmI").innerHTML =
-    `${esc(prof.name||prof.email)} <span class="tag" style="background:rgba(255,255,255,.18);color:#fff">${prof.role==="admin"?"ADMIN":"TEAM LEAD"}</span>`;
+    `${esc(prof.name||displayHandle(prof))} <span class="tag" style="background:rgba(255,255,255,.18);color:#fff">${prof.role==="admin"?"ADMIN":"TEAM LEAD"}</span>`;
   buildTabs();
   navigate(prof.role==="admin"?"dashboard":"myteam");
 }
@@ -475,7 +490,7 @@ function renderDashboard(){
   const rows = tls.map(p=>{
     const s=teamStats(TEAM_EMPS[p.id]||[]);
     return `<tr>
-      <td><b>${esc(p.name||p.email)}</b><br><span style="color:var(--muted);font-size:11.5px">${esc(p.email)}</span></td>
+      <td><b>${esc(p.name||displayHandle(p))}</b><br><span style="color:var(--muted);font-size:11.5px">@${esc(displayHandle(p))}</span></td>
       <td style="text-align:center">${s.total}</td>
       <td style="text-align:center;color:var(--green);font-weight:700">${s.c.GREEN}</td>
       <td style="text-align:center;color:var(--yellow);font-weight:700">${s.c.YELLOW}</td>
@@ -524,7 +539,7 @@ function renderTeamDrill(){
   const p=ALL_PROFILES.find(x=>x.id===viewingTeamId);
   if(!p){ viewingTeamId=null; return renderDashboard(); }
   return `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px" onclick="viewingTeamId=null;render()">← Back to Dashboard</button>
-  ${renderTracker(p.id, TEAM_EMPS[p.id]||[], true, p.name||p.email)}`;
+  ${renderTracker(p.id, TEAM_EMPS[p.id]||[], true, p.name||displayHandle(p))}`;
 }
 
 /* =============== TRACKER =============== */
@@ -551,7 +566,7 @@ function renderTracker(ownerId, allEmps, readOnly, ownerName){
         <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}</tr>`;
   }).join("");
   return `
-  <h2 class="page-title">🔍 Early Warning Signs Tracker — ${esc(ownerName || PROFILE.name || PROFILE.email)}</h2>
+  <h2 class="page-title">🔍 Early Warning Signs Tracker — ${esc(ownerName || PROFILE.name || displayHandle(PROFILE))}</h2>
   <div class="stats">
     <div class="stat"><div class="num">${allEmps.length}</div><div class="lbl">Team Headcount</div></div>
     <div class="stat s-green"><div class="num">${c.GREEN}</div><div class="lbl">🟢 Green</div></div>
@@ -582,7 +597,7 @@ function renderTracker(ownerId, allEmps, readOnly, ownerName){
 function refreshTable(ownerId, readOnly){
   const emps = readOnly? (TEAM_EMPS[ownerId]||[]) : EMPS;
   const p = readOnly? ALL_PROFILES.find(x=>x.id===ownerId) : null;
-  const html = renderTracker(ownerId, emps, readOnly, p?(p.name||p.email):null);
+  const html = renderTracker(ownerId, emps, readOnly, p?(p.name||displayHandle(p)):null);
   const wrap=document.getElementById("mainContent");
   wrap.innerHTML = (readOnly? `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px" onclick="viewingTeamId=null;render()">← Back to Dashboard</button>`:"") + html;
   const inp=wrap.querySelector(".toolbar input"); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
@@ -725,11 +740,11 @@ function renderUsers(){
   const others=ALL_PROFILES.filter(p=>p.role!=="admin");
   const rows=others.map(p=>{
     const n=(TEAM_EMPS[p.id]||[]).length;
-    const initials=(p.name||p.email).split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+    const initials=(p.name||displayHandle(p)).split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
     return `<div class="user-row">
       <div class="avatar">${esc(initials)}</div>
-      <div><div class="uname">${esc(p.name||p.email)} ${p.approved?`<span class="tag tag-ok">APPROVED</span>`:`<span class="tag tag-pending">PENDING</span>`}</div>
-      <div class="usub">${esc(p.email)} · ${n} employee${n===1?"":"s"} tracked · joined ${fmtDate(p.created_at)}</div></div>
+      <div><div class="uname">${esc(p.name||displayHandle(p))} ${p.approved?`<span class="tag tag-ok">APPROVED</span>`:`<span class="tag tag-pending">PENDING</span>`}</div>
+      <div class="usub">@${esc(displayHandle(p))} · ${n} employee${n===1?"":"s"} tracked · joined ${fmtDate(p.created_at)}</div></div>
       <div class="spacer"></div>
       ${p.approved
         ? `<button class="btn btn-ghost btn-sm" onclick="setApproval('${p.id}',false)">Revoke access</button>`
@@ -754,7 +769,7 @@ async function setApproval(id, approved){
 }
 async function removeUser(id){
   const p=ALL_PROFILES.find(x=>x.id===id); if(!p) return;
-  if(!confirm(`Remove "${p.name||p.email}" and delete their ${(TEAM_EMPS[id]||[]).length} employee record(s)?`)) return;
+  if(!confirm(`Remove "${p.name||displayHandle(p)}" and delete their ${(TEAM_EMPS[id]||[]).length} employee record(s)?`)) return;
   const {error} = await sb.from("profiles").delete().eq("id",id);
   if(error){ toast("Failed: "+error.message); return; }
   toast("User removed."); render();
@@ -804,15 +819,15 @@ function renderHeadcount(){
   if(isAdmin){
     if(HC_TEAM==="all"){ chain=hcAggregate(HC_YEAR); label="Overall — All Teams"; }
     else{ const p=ALL_PROFILES.find(x=>x.id===HC_TEAM);
-      chain=hcChain(HC_ALL.filter(r=>r.owner===HC_TEAM),HC_YEAR); label=p?(p.name||p.email):"Team"; }
-  } else { chain=hcChain(HC_ALL,HC_YEAR); label=PROFILE.name||PROFILE.email; editable=true; }
+      chain=hcChain(HC_ALL.filter(r=>r.owner===HC_TEAM),HC_YEAR); label=p?(p.name||displayHandle(p)):"Team"; }
+  } else { chain=hcChain(HC_ALL,HC_YEAR); label=PROFILE.name||displayHandle(PROFILE); editable=true; }
 
   const yearOpts=[HC_YEAR-1,HC_YEAR,HC_YEAR+1].filter((v,i,a)=>a.indexOf(v)===i)
     .concat([2025,2026,2027].filter(y=>![HC_YEAR-1,HC_YEAR,HC_YEAR+1].includes(y)))
     .sort().map(y=>`<option value="${y}" ${y===HC_YEAR?"selected":""}>${y}</option>`).join("");
   const teamSel = isAdmin? `<select id="hcTeamSel" onchange="HC_TEAM=this.value;render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">
       <option value="all" ${HC_TEAM==="all"?"selected":""}>Overall — All Teams</option>
-      ${ALL_PROFILES.filter(p=>p.role!=="admin"&&p.approved).map(p=>`<option value="${p.id}" ${HC_TEAM===p.id?"selected":""}>${esc(p.name||p.email)}</option>`).join("")}
+      ${ALL_PROFILES.filter(p=>p.role!=="admin"&&p.approved).map(p=>`<option value="${p.id}" ${HC_TEAM===p.id?"selected":""}>${esc(p.name||displayHandle(p))}</option>`).join("")}
     </select>`:"";
 
   const mh=chain.map(c=>`<th style="text-align:center">${MONTHS[c.month-1]}'${String(HC_YEAR).slice(2)}</th>`).join("");
@@ -931,7 +946,7 @@ function renderPerformer(){
   const inWindow=tls.length-flagged.length-noData.length;
   const rows=flagged.map((x,i)=>`<tr>
     <td>${i+1}</td>
-    <td><b>${esc(x.p.name||x.p.email)}</b><br><span style="color:var(--muted);font-size:11.5px">${esc(x.p.email)}</span></td>
+    <td><b>${esc(x.p.name||displayHandle(x.p))}</b><br><span style="color:var(--muted);font-size:11.5px">@${esc(displayHandle(x.p))}</span></td>
     <td style="text-align:center">${x.n}</td>
     <td style="text-align:center"><span class="score-pill" style="background:${x.avg>7?"var(--red-bg)":"var(--green-bg)"}">${x.avg.toFixed(1)} days</span></td>
     <td style="text-align:center">${new Date(x.last).toISOString().slice(0,10)}</td>
@@ -955,8 +970,8 @@ function renderPerformer(){
       <tbody>${rows}</tbody></table></div>`}
   </div>
   ${noData.length? `<div class="card"><h3>⏳ No employee entries yet</h3>
-    ${noData.map(x=>`<div class="user-row"><div class="avatar">${esc((x.p.name||x.p.email).split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase())}</div>
-    <div><div class="uname">${esc(x.p.name||x.p.email)}</div><div class="usub">${esc(x.p.email)} · approved but has not added any employees</div></div></div>`).join("")}
+    ${noData.map(x=>`<div class="user-row"><div class="avatar">${esc((x.p.name||displayHandle(x.p)).split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase())}</div>
+    <div><div class="uname">${esc(x.p.name||displayHandle(x.p))}</div><div class="usub">@${esc(displayHandle(x.p))} · approved but has not added any employees</div></div></div>`).join("")}
   </div>`:""}`;
 }
 
@@ -971,7 +986,7 @@ function renderSettings(){
   </div>
   <div class="card" style="max-width:520px">
     <h3>Account</h3>
-    <p style="font-size:13px;color:var(--muted)">Signed in as <b>${esc(PROFILE.email)}</b> (${PROFILE.role}). All entries save to the cloud automatically — log in from any device to see your data.</p>
+    <p style="font-size:13px;color:var(--muted)">Signed in as <b>@${esc(displayHandle(PROFILE))}</b> (${PROFILE.role}). All entries save to the cloud automatically — log in from any device to see your data.</p>
   </div>`;
 }
 async function changePass(){
@@ -986,7 +1001,7 @@ async function changePass(){
 function exportCSV(ownerId){
   const emps = PROFILE.role==="admin" && ownerId!==PROFILE.id ? (TEAM_EMPS[ownerId]||[]) : EMPS;
   const p = ALL_PROFILES.find(x=>x.id===ownerId);
-  const teamName = p? (p.name||p.email) : (PROFILE.name||PROFILE.email);
+  const teamName = p? (p.name||displayHandle(p)) : (PROFILE.name||displayHandle(PROFILE));
   const head=["#","Employee Name","Employee ID","Position","Date Hired","Risk Status",
     ...INDICATORS.map(([,l])=>l),"With Active CAP?","Risk Score","Rating (Last 3 Mo.)","TL Notes","Last Updated"];
   const lines=[head.map(csvCell).join(",")];
