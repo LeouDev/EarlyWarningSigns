@@ -466,9 +466,9 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
 
       <div class="help-topic">
         <h4>13. Performer — Who's Behind on Updates</h4>
-        <p>The <b>🚦 Performer</b> tab flags team leads whose average last-update falls outside a healthy 5–7 day window, so nothing goes stale unnoticed.</p>
+        <p>The <b>🚦 Performer</b> tab flags team leads whose average last-update falls outside a healthy 5–12 day window, so nothing goes stale unnoticed.</p>
         <ul class="help-steps">
-          <li><span class="num">1</span><span>🔴 Overdue — average update older than 7 days.</span></li>
+          <li><span class="num">1</span><span>🔴 Overdue — average update older than 12 days.</span></li>
           <li><span class="num">2</span><span>🟢 Fresh — average update younger than 5 days (also worth a look).</span></li>
           <li><span class="num">3</span><span><b>View Team →</b> jumps straight to the team behind the number.</span></li>
         </ul>
@@ -1362,30 +1362,30 @@ function renderPerformer(){
     const last=emps.reduce((a,e)=>Math.max(a,new Date(e.updated_at).getTime()),0);
     return {p, n:emps.length, avg, last};
   });
-  const flagged=items.filter(x=>x.n>0 && (x.avg>7 || x.avg<5)).sort((a,b)=>b.avg-a.avg);
+  const flagged=items.filter(x=>x.n>0 && (x.avg>12 || x.avg<5)).sort((a,b)=>b.avg-a.avg);
   const noData=items.filter(x=>x.n===0);
   const inWindow=tls.length-flagged.length-noData.length;
   const rows=flagged.map((x,i)=>`<tr>
     <td>${i+1}</td>
     <td><b>${esc(x.p.name||displayHandle(x.p))}</b><br><span style="color:var(--muted);font-size:11.5px">@${esc(displayHandle(x.p))}</span></td>
     <td style="text-align:center">${x.n}</td>
-    <td style="text-align:center"><span class="score-pill" style="background:${x.avg>7?"var(--red-bg)":"var(--green-bg)"}">${x.avg.toFixed(1)} days</span></td>
+    <td style="text-align:center"><span class="score-pill" style="background:${x.avg>12?"var(--red-bg)":"var(--green-bg)"}">${x.avg.toFixed(1)} days</span></td>
     <td style="text-align:center">${new Date(x.last).toISOString().slice(0,10)}</td>
-    <td>${x.avg>7?"🔴 Overdue — avg more than 7 days":"🟢 Fresh — avg less than 5 days"}</td>
+    <td>${x.avg>12?"🔴 Overdue — avg more than 12 days":"🟢 Fresh — avg less than 5 days"}</td>
     <td><button class="btn btn-ghost btn-sm" onclick="navigate('dashboard');drillTeam('${x.p.id}')">View Team →</button></td>
   </tr>`).join("");
   return `
   <h2 class="page-title">🚦 Performer — Tracker Update Compliance</h2>
   <div class="stats">
     <div class="stat"><div class="num">${tls.length}</div><div class="lbl">Active Team Leads</div></div>
-    <div class="stat s-red"><div class="num">${flagged.filter(x=>x.avg>7).length}</div><div class="lbl">🔴 Avg Older Than 7 Days</div></div>
+    <div class="stat s-red"><div class="num">${flagged.filter(x=>x.avg>12).length}</div><div class="lbl">🔴 Avg Older Than 12 Days</div></div>
     <div class="stat s-green"><div class="num">${flagged.filter(x=>x.avg<5).length}</div><div class="lbl">🟢 Avg Under 5 Days</div></div>
-    <div class="stat"><div class="num">${inWindow}</div><div class="lbl">Within 5–7 Day Window</div></div>
+    <div class="stat"><div class="num">${inWindow}</div><div class="lbl">Within 5–12 Day Window</div></div>
     <div class="stat s-yellow"><div class="num">${noData.length}</div><div class="lbl">No Entries Yet</div></div>
   </div>
   <div class="card">
-    <h3>Team leads whose average last-update is more than 7 days or less than 5 days old</h3>
-    ${flagged.length===0? `<div class="empty">Nobody flagged — every team's average last-update falls within the 5–7 day window.</div>`:`
+    <h3>Team leads whose average last-update is more than 12 days or less than 5 days old</h3>
+    ${flagged.length===0? `<div class="empty">Nobody flagged — every team's average last-update falls within the 5–12 day window.</div>`:`
     <div class="tbl-wrap"><table class="fit">
       <thead><tr><th>#</th><th>Team / User</th><th>Employees</th><th>Avg Days Since Update</th><th>Most Recent Update</th><th>Flag</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`}
