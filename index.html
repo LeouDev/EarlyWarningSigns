@@ -68,6 +68,8 @@ h2.page-title{font-size:19px;margin-bottom:16px}
 .stat .lbl{font-size:12px;color:var(--muted);margin-top:2px}
 .stat.s-green .num{color:var(--green)} .stat.s-yellow .num{color:var(--yellow)}
 .stat.s-red .num{color:var(--red)} .stat.s-black .num{color:var(--black)}
+.stat-click{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}
+.stat-click:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(156,122,52,.14)}
 
 .tbl-wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}
@@ -334,6 +336,8 @@ let EMPS = [];             // my employees (user view)
 let TEAM_EMPS = {};        // admin: owner id -> employees[]
 let currentTab = "";
 let legendOpen = false;
+let dashStatusFilter = null;
+let dashStatusSearch = "";
 let viewingTeamId = null;
 let editingEmpId = null;
 let indState = {};
@@ -437,7 +441,7 @@ function buildTabs(){
     tabs.map(([id,lbl])=>`<button id="tab_${id}" onclick="navigate('${id}')">${lbl}</button>`).join("");
 }
 function navigate(tab){
-  currentTab=tab; if(tab!=="dashboard") viewingTeamId=null;
+  currentTab=tab; if(tab!=="dashboard"){ viewingTeamId=null; dashStatusFilter=null; }
   document.querySelectorAll("#navTabs button").forEach(b=>b.classList.remove("active"));
   const btn=document.getElementById("tab_"+tab); if(btn) btn.classList.add("active");
   render();
@@ -447,7 +451,7 @@ async function render(){
   el.innerHTML=`<div class="loading">Loading…</div>`;
   try{
     if(PROFILE.role==="admin"){
-      if(currentTab==="dashboard"){ await loadAdminData(); el.innerHTML = viewingTeamId? renderTeamDrill() : renderDashboard(); }
+      if(currentTab==="dashboard"){ await loadAdminData(); el.innerHTML = viewingTeamId? renderTeamDrill() : (dashStatusFilter? renderStatusDrill() : renderDashboard()); }
       else if(currentTab==="headcount"){ await loadAdminData(); await loadHc(true); el.innerHTML = renderHeadcount(); }
       else if(currentTab==="attrition"){ await loadAdminData(); el.innerHTML = renderAttrition(true); }
       else if(currentTab==="performer"){ await loadAdminData(); el.innerHTML = renderPerformer(); }
@@ -517,12 +521,12 @@ function renderDashboard(){
   <h2 class="page-title">📊 Early Warning Signs — Operations Dashboard</h2>
   ${pending? `<div class="setup-banner">⏳ <b>${pending} signup${pending===1?"":"s"}</b> waiting for approval — review in the <a style="cursor:pointer;text-decoration:underline" onclick="navigate('users')"><b>Users</b></a> tab.</div>`:""}
   <div class="stats">
-    <div class="stat"><div class="num">${hc}</div><div class="lbl">Active Headcount</div></div>
-    <div class="stat s-green"><div class="num">${g.GREEN}</div><div class="lbl">🟢 Green</div></div>
-    <div class="stat s-yellow"><div class="num">${g.YELLOW}</div><div class="lbl">🟡 Yellow</div></div>
-    <div class="stat s-red"><div class="num">${g.RED}</div><div class="lbl">🔴 Red</div></div>
-    <div class="stat s-black"><div class="num">${g.BLACK}</div><div class="lbl">⚫ Permanent Attrition</div></div>
-    <div class="stat"><div class="num">${hc?Math.round(g.RED/hc*100):0}%</div><div class="lbl">% At Risk (Red)</div></div>
+    <div class="stat stat-click" onclick="drillStatus('ALL')"><div class="num">${hc}</div><div class="lbl">Active Headcount</div></div>
+    <div class="stat s-green stat-click" onclick="drillStatus('GREEN')"><div class="num">${g.GREEN}</div><div class="lbl">🟢 Green</div></div>
+    <div class="stat s-yellow stat-click" onclick="drillStatus('YELLOW')"><div class="num">${g.YELLOW}</div><div class="lbl">🟡 Yellow</div></div>
+    <div class="stat s-red stat-click" onclick="drillStatus('RED')"><div class="num">${g.RED}</div><div class="lbl">🔴 Red</div></div>
+    <div class="stat s-black stat-click" onclick="ATTR_TEAM='all';ATTR_MONTH='all';navigate('attrition')"><div class="num">${g.BLACK}</div><div class="lbl">⚫ Permanent Attrition</div></div>
+    <div class="stat stat-click" onclick="drillStatus('RED')"><div class="num">${hc?Math.round(g.RED/hc*100):0}%</div><div class="lbl">% At Risk (Red)</div></div>
   </div>
   <div class="card">
     <h3>Team-Level Risk Summary</h3>
@@ -545,12 +549,72 @@ function renderDashboard(){
     </details>
   </div>`;
 }
-function drillTeam(id){ viewingTeamId=id; document.getElementById("mainContent").innerHTML=renderTeamDrill(); }
+function drillTeam(id){ viewingTeamId=id; dashStatusFilter=null; document.getElementById("mainContent").innerHTML=renderTeamDrill(); }
 function renderTeamDrill(){
   const p=ALL_PROFILES.find(x=>x.id===viewingTeamId);
   if(!p){ viewingTeamId=null; return renderDashboard(); }
   return `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px" onclick="viewingTeamId=null;render()">← Back to Dashboard</button>
   ${renderTracker(p.id, TEAM_EMPS[p.id]||[], true, p.name||displayHandle(p))}`;
+}
+function drillStatus(type){ dashStatusFilter=type; dashStatusSearch=""; viewingTeamId=null; render(); }
+function renderStatusDrill(){
+  const type = dashStatusFilter;
+  const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+  let list = [];
+  tls.forEach(p=>{
+    const active = (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition!=="BLACK");
+    active.forEach(e=>{
+      const st = calcStatus(e);
+      if(type==="ALL" || st===type) list.push({...e, _team:p.name||displayHandle(p), _status:st});
+    });
+  });
+  if(dashStatusSearch){
+    const q=dashStatusSearch.toLowerCase();
+    list = list.filter(e=>(e.name||"").toLowerCase().includes(q)||(e.empid||"").toLowerCase().includes(q)||(e._team||"").toLowerCase().includes(q));
+  }
+  const titles={ALL:"Active Headcount",GREEN:"🟢 Green",YELLOW:"🟡 Yellow",RED:"🔴 Red"};
+  const rows = list.map((e,i)=>`<tr>
+    <td>${i+1}</td>
+    <td>${esc(e._team)}</td>
+    <td><b>${esc(e.name)}</b></td>
+    <td>${esc(e.empid)}</td>
+    <td>${esc(e.pos)}</td>
+    <td>${statusBadge(e._status)}</td>
+    <td><span class="score-pill">${calcScore(e)}</span></td>
+    <td>${esc(e.rating)}</td>
+    <td class="wrap">${esc(e.notes)}</td>
+    <td>${fmtDate(e.updated_at)}</td></tr>`).join("");
+  return `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px" onclick="dashStatusFilter=null;render()">← Back to Dashboard</button>
+  <h2 class="page-title">${titles[type]||type} — All Teams</h2>
+  <div class="stats"><div class="stat"><div class="num">${list.length}</div><div class="lbl">Employees Matching</div></div></div>
+  <div class="card">
+    <div class="toolbar">
+      <input type="text" placeholder="🔎 Search name, ID, team…" value="${esc(dashStatusSearch)}" oninput="dashStatusSearch=this.value;render()">
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" onclick="exportStatusDrillCSV()">⬇ Export CSV</button>
+    </div>
+    ${list.length===0? `<div class="empty">No employees match this filter.</div>`:`
+    <div class="tbl-wrap"><table class="fit">
+      <thead><tr><th>#</th><th>Team</th><th>Employee Name</th><th>Employee ID</th><th>Position</th><th>Risk Status</th><th>Risk Score</th><th>Rating (Last 3 Mo.)</th><th>TL Notes</th><th>Last Updated</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`}
+  </div>`;
+}
+function exportStatusDrillCSV(){
+  const type = dashStatusFilter;
+  const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+  let list = [];
+  tls.forEach(p=>{
+    (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition!=="BLACK").forEach(e=>{
+      const st = calcStatus(e);
+      if(type==="ALL" || st===type) list.push({...e, _team:p.name||displayHandle(p), _status:st});
+    });
+  });
+  const head=["#","Team","Employee Name","Employee ID","Position","Risk Status","Risk Score","Rating (Last 3 Mo.)","TL Notes","Last Updated"];
+  const lines=[head.map(csvCell).join(",")];
+  list.forEach((e,i)=>{ lines.push([i+1,e._team,e.name,e.empid,e.pos,e._status,calcScore(e),e.rating,e.notes,fmtDate(e.updated_at)].map(csvCell).join(",")); });
+  const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="EWS_"+(type||"ALL")+"_AllTeams.csv"; a.click();
 }
 
 /* =============== TRACKER =============== */
@@ -953,6 +1017,10 @@ async function deleteHc(){
 
 /* =============== PERMANENT ATTRITION =============== */
 let ATTR_TEAM = "all";
+let ATTR_MONTH = "all";
+const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+function monthKey(dateStr){ if(!dateStr) return null; const s=String(dateStr).slice(0,7); return /^\d{4}-\d{2}$/.test(s)? s : null; }
+function monthLabel(key){ const [y,m]=key.split("-"); return MONTH_NAMES[parseInt(m,10)-1]+" "+y; }
 function renderAttrition(isAdmin){
   let list, teamSel="";
   if(isAdmin){
@@ -971,6 +1039,13 @@ function renderAttrition(isAdmin){
   } else {
     list = EMPS.filter(e=>e.attrition==="BLACK");
   }
+  const monthKeys = [...new Set(list.map(e=>monthKey(e.attrition_date||e.updated_at)).filter(Boolean))].sort().reverse();
+  if(!monthKeys.includes(ATTR_MONTH)) ATTR_MONTH="all";
+  const monthSel = `<select id="attrMonthSel" onchange="ATTR_MONTH=this.value;render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">
+    <option value="all" ${ATTR_MONTH==="all"?"selected":""}>All Months</option>
+    ${monthKeys.map(k=>`<option value="${k}" ${ATTR_MONTH===k?"selected":""}>${monthLabel(k)}</option>`).join("")}
+  </select>`;
+  if(ATTR_MONTH!=="all") list = list.filter(e=>monthKey(e.attrition_date||e.updated_at)===ATTR_MONTH);
   list.sort((a,b)=> new Date(b.attrition_date||b.updated_at) - new Date(a.attrition_date||a.updated_at));
   const showTeamCol = isAdmin && ATTR_TEAM==="all";
   const rows = list.map((e,i)=>`<tr>
@@ -996,10 +1071,11 @@ function renderAttrition(isAdmin){
   <div class="card">
     <div class="toolbar">
       ${teamSel}
+      ${monthSel}
       <div class="spacer"></div>
       <button class="btn btn-ghost btn-sm" onclick="exportAttritionCSV(${isAdmin})">⬇ Export CSV</button>
     </div>
-    ${list.length===0? `<div class="empty">No permanent attritions recorded${isAdmin&&ATTR_TEAM!=="all"?" for this team":""} yet. Mark an employee's <b>Confirmed Attrition?</b> as Yes in their tracker entry to move them here.</div>`:`
+    ${list.length===0? `<div class="empty">No permanent attritions recorded${isAdmin&&ATTR_TEAM!=="all"?" for this team":""}${ATTR_MONTH!=="all"?" in "+monthLabel(ATTR_MONTH):""}. Mark an employee's <b>Confirmed Attrition?</b> as Yes in their tracker entry to move them here.</div>`:`
     <div class="tbl-wrap"><table class="fit">
       <thead><tr><th>#</th><th>Employee Name</th><th>Employee ID</th>${showTeamCol?"<th>Team</th>":""}<th>Position</th><th>Date Hired</th><th>Attrition Date</th><th>Last Risk Score</th><th>Rating (Last 3 Mo.)</th><th>TL Notes</th>${isAdmin?"":"<th>Actions</th>"}</tr></thead>
       <tbody>${rows}</tbody></table></div>`}
@@ -1016,6 +1092,7 @@ function exportAttritionCSV(isAdmin){
   } else {
     list = EMPS.filter(e=>e.attrition==="BLACK");
   }
+  if(ATTR_MONTH!=="all") list = list.filter(e=>monthKey(e.attrition_date||e.updated_at)===ATTR_MONTH);
   const head=["#","Employee Name","Employee ID", ...(isAdmin?["Team"]:[]), "Position","Date Hired","Attrition Date","Last Risk Score","Rating (Last 3 Mo.)","TL Notes"];
   const lines=[head.map(csvCell).join(",")];
   list.forEach((e,i)=>{
