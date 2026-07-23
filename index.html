@@ -174,6 +174,33 @@ td{border-bottom:1px solid var(--line)}
 .toast{background:var(--brand);color:var(--cream);border:1px solid var(--gold);font-family:var(--r-mono);font-size:12.5px}
 .pending-wrap{background:linear-gradient(150deg,#0F1B33,#24396B)}
 .empty,.loading{font-family:var(--r-mono);font-size:12.5px}
+
+/* ---------- HELP / HOW TO USE ---------- */
+.help-btn{background:transparent;border:1px solid rgba(198,161,91,.5);color:var(--gold);padding:7px 14px;border-radius:20px;font-family:var(--r-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-left:6px;white-space:nowrap}
+.help-btn:hover{background:rgba(198,161,91,.14);border-color:var(--gold)}
+.help-modal-bg{display:none;position:fixed;inset:0;background:rgba(15,27,51,.6);z-index:200;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+.help-modal-bg.open{display:flex}
+.help-modal{background:var(--cream);border-radius:14px;width:880px;max-width:100%;box-shadow:0 30px 90px rgba(0,0,0,.4);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 64px)}
+.help-head{background:var(--brand);color:var(--cream);padding:18px 26px;display:flex;align-items:center;gap:14px;flex:none;border-bottom:2px solid var(--gold)}
+.help-head h2{font-family:var(--r-display);font-weight:500;font-size:19px;letter-spacing:-.01em}
+.help-head .sub{font-family:var(--r-mono);font-size:10.5px;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+.help-head .spacer{flex:1}
+.help-close{background:rgba(255,255,255,.14);color:#fff;border-radius:50%;width:32px;height:32px;font-size:16px;flex:none}
+.help-close:hover{background:rgba(255,255,255,.25)}
+.help-jump{display:flex;gap:8px;padding:12px 26px;background:#fff;border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap;position:sticky;top:0;z-index:2}
+.help-jump button{font-family:var(--r-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--cream2);border-radius:20px;padding:6px 14px}
+.help-jump button:hover{color:var(--navy);background:#EADFC2}
+.help-scroll{overflow-y:auto;padding:24px 26px 40px}
+.help-sec-title{font-family:var(--r-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-deep);margin:28px 0 4px;display:flex;align-items:center;gap:8px}
+.help-sec-title:first-child{margin-top:0}
+.help-sec-title hr{flex:1;border:none;border-top:1px solid var(--line)}
+.help-topic{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:12px;box-shadow:0 6px 16px rgba(156,122,52,.05)}
+.help-topic h4{font-family:var(--r-display);font-weight:500;font-size:15.5px;color:var(--brand);margin-bottom:8px}
+.help-topic p{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:10px}
+.help-steps{list-style:none;display:flex;flex-direction:column;gap:8px}
+.help-steps li{display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--ink);line-height:1.5}
+.help-steps .num{flex:none;width:19px;height:19px;border-radius:50%;background:var(--brand);color:var(--gold);font-family:var(--r-mono);font-size:9.5px;display:flex;align-items:center;justify-content:center;font-weight:600;margin-top:1px}
+.help-legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 .legend-summary{cursor:pointer;font-family:var(--r-display);font-weight:500;font-size:16.5px;color:var(--brand);list-style:none;outline:none;display:flex;align-items:center;gap:8px}
 .legend-summary::-webkit-details-marker{display:none}
 .legend-summary::before{content:"▸";font-family:var(--r-body);font-size:13px;color:var(--gold-deep);transition:transform .15s ease}
@@ -222,6 +249,7 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
   <div class="topbar">
     <span class="logo">🔍 EWS Tracker</span>
     <div class="tabs" id="navTabs"></div>
+    <button class="help-btn" onclick="openHelp()">❓ How to Use?</button>
     <div class="spacer"></div>
     <span class="who" id="whoAmI"></span>
     <button class="logout" onclick="doLogout()">Logout</button>
@@ -238,6 +266,20 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
       <h1 style="font-size:19px;margin:8px 0">Waiting for Approval</h1>
       <p class="sub" style="margin-bottom:20px">Your account was created and is pending admin approval.<br>Please check back later or contact your administrator.</p>
       <button class="btn btn-ghost" style="width:100%" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= ADMIN TAB GATE ================= -->
+<div class="modal-bg" id="gateModalBg">
+  <div class="modal" style="width:380px">
+    <h3>🔒 Restricted Area</h3>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Enter the admin password to open this tab.</p>
+    <div class="field"><label>Password</label><input id="gatePass" type="password" placeholder="Enter password" onkeydown="if(event.key==='Enter')submitGate()"></div>
+    <div class="err" id="gateErr" style="color:var(--red);font-size:12.5px;min-height:16px;margin-bottom:6px"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="cancelGate()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="submitGate()">Unlock</button>
     </div>
   </div>
 </div>
@@ -274,6 +316,172 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('empModalBg')">Cancel</button>
       <button class="btn btn-primary btn-sm" id="saveEmpBtn" onclick="saveEmployee()">Save Employee</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= HELP / HOW TO USE ================= -->
+<div class="help-modal-bg" id="helpModalBg">
+  <div class="help-modal">
+    <div class="help-head">
+      <div>
+        <h2>❓ How to Use EWS Tracker</h2>
+        <div class="sub">A quick guide for Team Leads and Admins</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="help-close" onclick="closeModal('helpModalBg')">✕</button>
+    </div>
+    <div class="help-jump">
+      <button onclick="jumpHelp('help-tl')">📋 For Team Leads</button>
+      <button onclick="jumpHelp('help-admin')">⚙ For Admins</button>
+    </div>
+    <div class="help-scroll" id="helpScroll">
+
+      <div class="help-sec-title" id="help-tl">📋 FOR TEAM LEADS<hr></div>
+
+      <div class="help-topic">
+        <h4>1. Sign Up & Get Approved</h4>
+        <p>No email required — just a name, a username, and a password. New accounts wait for admin approval before they can log in.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Click <b>Sign up</b> on the login screen and fill in your name, username, and password.</span></li>
+          <li><span class="num">2</span><span>You'll land on a <b>Waiting for Approval</b> screen — this is normal.</span></li>
+          <li><span class="num">3</span><span>Once your admin approves you in the Users tab, log back in and you're in.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>2. Log In to Your Tracker</h4>
+        <p>Once approved, log in with your username and password. You land straight on <b>My Team</b> — your own employee roster, private to you.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Your tabs are: <b>My Team</b>, <b>Headcount</b>, <b>Permanent Attrition</b>, and <b>Settings</b>.</span></li>
+          <li><span class="num">2</span><span>Stat cards at the top always show your live counts — headcount and risk levels.</span></li>
+          <li><span class="num">3</span><span>Nobody else's team is visible here — only your admin can see across teams.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>3. Add an Employee</h4>
+        <p>Click <b>＋ Add Employee</b>, fill in the basics, and flip each warning indicator to YES or NO. The risk score and status calculate live as you go.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Enter <b>Employee Name</b> and <b>Employee ID</b> — the only two required fields.</span></li>
+          <li><span class="num">2</span><span>Toggle the 10 warning indicators (tardiness, absences, low productivity, and so on).</span></li>
+          <li><span class="num">3</span><span>Set <b>With Active CAP?</b>, add a rating and TL notes, then hit <b>Save</b>.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>4. Understanding Risk Status</h4>
+        <p>The risk score is the number of indicators marked YES, plus one if Active CAP is YES. Status follows the score automatically — you never set it manually.</p>
+        <div class="help-legend">
+          <span class="badge b-GREEN">🟢 GREEN — Score 0</span>
+          <span class="badge b-YELLOW">🟡 YELLOW — Score 1–3</span>
+          <span class="badge b-RED">🔴 RED — Score 4+</span>
+          <span class="badge b-BLACK">⚫ BLACK — Confirmed attrition</span>
+        </div>
+      </div>
+
+      <div class="help-topic">
+        <h4>5. Bulk Import via Excel</h4>
+        <p>Onboarding a whole roster? Skip the one-by-one form and use the spreadsheet template instead.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Click <b>📥 Download Template</b> — a ready-made .xlsx with every column and a sample row.</span></li>
+          <li><span class="num">2</span><span>Fill it out in Excel, one employee per row.</span></li>
+          <li><span class="num">3</span><span>Click <b>📤 Upload Filled Excel</b> — every valid row is added instantly.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>6. Mark Permanent Attrition</h4>
+        <p>When someone resigns or is terminated, don't delete them — confirm their attrition and they move themselves to a separate register.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Edit the employee and set <b>Confirmed Attrition?</b> to Yes.</span></li>
+          <li><span class="num">2</span><span>An <b>Attrition Date</b> field appears — set it (defaults to today).</span></li>
+          <li><span class="num">3</span><span>Save — they leave your active roster and appear in <b>Permanent Attrition</b> instead. Change it back to "No" any time to restore them.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>7. Track Monthly Headcount</h4>
+        <p>The <b>Headcount</b> tab tracks hires, transfers, and attrition month by month — Closing HC calculates itself and rolls into next month's Opening HC.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Click <b>＋ Add Monthly Entry</b>, pick the month, enter hires/transfers/attrition.</span></li>
+          <li><span class="num">2</span><span>Leave Opening HC blank to auto-carry last month's closing number.</span></li>
+          <li><span class="num">3</span><span>YTD stat cards update instantly — hires, attrition, projected year-end headcount.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>8. Search, Edit & Export</h4>
+        <p>Small tools that save time once your roster grows.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>The search box filters by name, ID, or position as you type.</span></li>
+          <li><span class="num">2</span><span>✏️ edits an entry, 🗑 removes it — changes save to the cloud immediately.</span></li>
+          <li><span class="num">3</span><span><b>⬇ Export CSV</b> downloads your current roster for reporting or offline review.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-sec-title" id="help-admin">⚙ FOR ADMINS<hr></div>
+
+      <div class="help-topic">
+        <h4>9. Your Dashboard</h4>
+        <p>Admins log in to a bird's-eye view of every team — total headcount, risk breakdown, and a per-team summary table.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Top stat cards total every approved team's active roster.</span></li>
+          <li><span class="num">2</span><span><b>Team-Level Risk Summary</b> ranks each team lead's counts, avg score, and action priority.</span></li>
+          <li><span class="num">3</span><span><b>View Team →</b> opens that team's full tracker, read-only.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>10. Click Any Number to Drill In</h4>
+        <p>Every stat card on the Dashboard is clickable — no need to open each team one by one to find who's driving a number.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Click <b>🔴 Red</b> and see every red-flagged employee across all teams at once.</span></li>
+          <li><span class="num">2</span><span>Click <b>⚫ Permanent Attrition</b> to jump straight into the full attrition register.</span></li>
+          <li><span class="num">3</span><span>Each drilldown has its own search box and CSV export.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>11. View Any Team's Full Roster</h4>
+        <p>Need the complete picture for one team lead? Click <b>View Team →</b> from the Dashboard table to open their entire tracker in read-only mode.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>See every column their team lead sees — indicators, notes, ratings.</span></li>
+          <li><span class="num">2</span><span>No edit/delete controls here — admins view, team leads maintain.</span></li>
+          <li><span class="num">3</span><span>Use <b>← Back to Dashboard</b> to return to the overview.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>12. Headcount & Attrition, All Teams</h4>
+        <p>Both tabs work the same way for admins as for team leads — except you can view the combined total or filter down to a single team.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span><b>Headcount</b>: pick "Overall — All Teams" or any single team from the dropdown.</span></li>
+          <li><span class="num">2</span><span><b>Permanent Attrition</b>: filter by team and by month to review confirmed exits.</span></li>
+          <li><span class="num">3</span><span>Both are read-only for admins and export to CSV.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>13. Performer — Who's Behind on Updates</h4>
+        <p>The <b>🚦 Performer</b> tab flags team leads whose average last-update falls outside a healthy 5–7 day window, so nothing goes stale unnoticed.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>🔴 Overdue — average update older than 7 days.</span></li>
+          <li><span class="num">2</span><span>🟢 Fresh — average update younger than 5 days (also worth a look).</span></li>
+          <li><span class="num">3</span><span><b>View Team →</b> jumps straight to the team behind the number.</span></li>
+        </ul>
+      </div>
+
+      <div class="help-topic">
+        <h4>14. Approve New Users</h4>
+        <p>New signups can't log in until you say so. The <b>Users</b> tab is where every account gets approved, revoked, or removed.</p>
+        <ul class="help-steps">
+          <li><span class="num">1</span><span>Pending signups show a <b>PENDING</b> badge — click <b>✓ Approve</b> to activate them.</span></li>
+          <li><span class="num">2</span><span><b>Revoke access</b> locks an approved account back out without deleting their data.</span></li>
+          <li><span class="num">3</span><span><b>Remove</b> permanently deletes the account and their employee records.</span></li>
+        </ul>
+      </div>
+
     </div>
   </div>
 </div>
@@ -350,6 +558,8 @@ let searchQ = "";
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2400); }
 function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+function openHelp(){ document.getElementById("helpModalBg").classList.add("open"); document.getElementById("helpScroll").scrollTop = 0; }
+function jumpHelp(id){ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:"smooth", block:"start"}); }
 function calcScore(e){ let n=INDICATORS.reduce((a,[k])=>a+((e.ind&&e.ind[k])==="YES"?1:0),0); if(e.cap==="YES")n++; return n; }
 function calcStatus(e){ if(e.attrition==="BLACK")return"BLACK"; const s=calcScore(e); return s===0?"GREEN":s<=3?"YELLOW":"RED"; }
 function statusBadge(st){ return `<span class="badge b-${st}">${STATUS_META[st].icon} ${st}</span>`; }
@@ -411,7 +621,7 @@ async function doSignup(){
 }
 async function doLogout(){
   if(sb) await sb.auth.signOut();
-  PROFILE=null; viewingTeamId=null;
+  PROFILE=null; viewingTeamId=null; gateUnlocked=false; pendingGateTab=null;
   document.getElementById("appView").style.display="none";
   document.getElementById("pendingView").style.display="none";
   document.getElementById("loginView").style.display="flex";
@@ -443,11 +653,43 @@ function buildTabs(){
   document.getElementById("navTabs").innerHTML =
     tabs.map(([id,lbl])=>`<button id="tab_${id}" onclick="navigate('${id}')">${lbl}</button>`).join("");
 }
+const GATE_PASSWORD = "Post_Malone123";
+const GATED_TABS = ["users","settings"];
+let gateUnlocked = false;
+let pendingGateTab = null;
 function navigate(tab){
+  if(PROFILE && PROFILE.role==="admin" && GATED_TABS.includes(tab) && !gateUnlocked){
+    pendingGateTab = tab;
+    document.getElementById("gatePass").value = "";
+    document.getElementById("gateErr").textContent = "";
+    document.getElementById("gateModalBg").classList.add("open");
+    setTimeout(()=>document.getElementById("gatePass").focus(), 50);
+    return;
+  }
+  _doNavigate(tab);
+}
+function _doNavigate(tab){
   currentTab=tab; if(tab!=="dashboard"){ viewingTeamId=null; dashStatusFilter=null; }
   document.querySelectorAll("#navTabs button").forEach(b=>b.classList.remove("active"));
   const btn=document.getElementById("tab_"+tab); if(btn) btn.classList.add("active");
   render();
+}
+function submitGate(){
+  const val = document.getElementById("gatePass").value;
+  if(val === GATE_PASSWORD){
+    gateUnlocked = true;
+    document.getElementById("gateModalBg").classList.remove("open");
+    const tab = pendingGateTab; pendingGateTab = null;
+    _doNavigate(tab);
+  } else {
+    document.getElementById("gateErr").textContent = "Incorrect password.";
+    document.getElementById("gatePass").value = "";
+    document.getElementById("gatePass").focus();
+  }
+}
+function cancelGate(){
+  document.getElementById("gateModalBg").classList.remove("open");
+  pendingGateTab = null;
 }
 async function render(){
   const el=document.getElementById("mainContent");
