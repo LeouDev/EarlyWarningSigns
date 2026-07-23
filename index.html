@@ -4,15 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EWS Tracker — Early Warning Signs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
-  --bg:#f4f6fa; --card:#ffffff; --ink:#1c2333; --muted:#6b7280; --line:#e5e9f0;
-  --brand:#1f3a8a; --brand2:#3b5bdb; --green:#16a34a; --yellow:#d97706; --red:#dc2626; --black:#111827;
-  --green-bg:#dcfce7; --yellow-bg:#fef3c7; --red-bg:#fee2e2; --black-bg:#e5e7eb;
+  --bg:#F6F1E4; --card:#ffffff; --ink:#1B1E27; --muted:#5B5F6B; --line:#DED4B9;
+  --brand:#0F1B33; --brand2:#24396B; --gold:#C6A15B; --gold-deep:#9C7A34; --cream:#F6F1E4; --cream2:#EDE6D3;
+  --green:#4A6B52; --yellow:#B08328; --red:#A9463A; --black:#1B1E27;
+  --green-bg:#E4EEE1; --yellow-bg:#F5EBD3; --red-bg:#FCEEEC; --black-bg:#E5E2D8;
+  --r-display:'Fraunces',serif; --r-body:'IBM Plex Sans',sans-serif; --r-mono:'IBM Plex Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+body{font-family:var(--r-body);background:var(--bg);color:var(--ink);font-size:13.5px;-webkit-font-smoothing:antialiased}
+::selection{background:var(--gold);color:var(--brand)}
 button{cursor:pointer;font-family:inherit}
 input,select,textarea{font-family:inherit;font-size:14px}
 
@@ -51,7 +57,6 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .main{padding:22px;max-width:none;margin:0 auto}
 table.fit{table-layout:auto;width:100%}
 table.fit th{white-space:normal;text-align:center}
-table.fit th:first-child{text-align:left}
 table.fit td{white-space:normal}
 h2.page-title{font-size:19px;margin-bottom:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 1px 3px rgba(16,24,40,.05)}
@@ -66,10 +71,10 @@ h2.page-title{font-size:19px;margin-bottom:16px}
 
 .tbl-wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}
-th{background:#1f3a8a;color:#fff;padding:9px 10px;text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0}
-td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+th{background:#1f3a8a;color:#fff;padding:9px 10px;text-align:center;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;position:sticky;top:0}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap;text-align:center}
 tr:hover td{background:#f8faff}
-td.wrap{white-space:normal;min-width:180px;max-width:280px}
+td.wrap{white-space:normal;min-width:180px;max-width:280px;text-align:center}
 .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:700;font-size:11.5px;white-space:nowrap}
 .b-GREEN{background:var(--green-bg);color:var(--green)}
 .b-YELLOW{background:var(--yellow-bg);color:var(--yellow)}
@@ -114,12 +119,69 @@ td.wrap{white-space:normal;min-width:180px;max-width:280px}
 .toast.show{opacity:1}
 .pending-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1f3a8a,#5f3dc4);padding:20px}
 @media(max-width:760px){.grid2,.grid3,.ind-grid{grid-template-columns:1fr}}
+
+/* ---------- MBO2 THEME OVERRIDES (navy · cream · gold) ---------- */
+#loginView{background:linear-gradient(150deg,#0F1B33 0%,#182A4D 55%,#24396B 100%);position:relative;overflow:hidden}
+.dotfield{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#appDots{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.main{position:relative;z-index:1}
+.login-card{border-radius:8px;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.45);position:relative;z-index:1}
+.pending-wrap{position:relative;overflow:hidden}
+.login-card h1{font-family:var(--r-display);font-weight:500;color:var(--brand);letter-spacing:-.02em}
+.login-card p.sub{font-family:var(--r-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-deep)}
+.field label{font-family:var(--r-mono);font-size:10px;letter-spacing:.08em;color:var(--muted)}
+.field input,.field select,.field textarea{border-radius:6px;background:#fff}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold-deep);box-shadow:0 0 0 3px rgba(198,161,91,.18)}
+.btn{border-radius:24px}
+.btn-primary{background:var(--brand);color:var(--cream)}
+.btn-primary:hover{background:var(--brand2)}
+.btn-ghost{background:var(--cream2);color:var(--ink)}
+.btn-ghost:hover{background:#E2DAC2}
+.login-toggle a{color:var(--gold-deep)}
+.login-hint,.setup-banner{background:var(--cream2);border:1px dashed var(--gold);color:var(--ink)}
+.topbar{background:var(--brand);border-bottom:2px solid var(--gold)}
+.topbar .logo{font-family:var(--r-display);font-weight:500;color:var(--gold);letter-spacing:.02em}
+.topbar .tabs button{color:#B9C2D8;font-family:var(--r-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+.topbar .tabs button.active,.topbar .tabs button:hover{background:rgba(198,161,91,.16);color:var(--gold)}
+.topbar .who{font-family:var(--r-mono);font-size:11.5px;color:var(--cream2)}
+.topbar .logout{border-radius:20px}
+h2.page-title{font-family:var(--r-display);font-weight:500;font-size:26px;color:var(--brand);letter-spacing:-.02em}
+.card,.stat{border-radius:8px;box-shadow:0 8px 22px rgba(156,122,52,.06)}
+.card h3{font-family:var(--r-display);font-weight:500;font-size:16.5px;color:var(--brand)}
+.stat .num{font-family:var(--r-display);font-weight:500;color:var(--brand)}
+.stat .lbl{font-family:var(--r-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+th{background:var(--brand);color:var(--cream);font-family:var(--r-mono);font-weight:500;letter-spacing:.08em;font-size:10.5px}
+tr:hover td{background:#FBF8EF}
+td{border-bottom:1px solid var(--line)}
+.badge,.score-pill,.tag{font-family:var(--r-mono)}
+.toolbar input[type=text],.toolbar select{border-radius:20px;background:#fff}
+.modal{border-radius:8px;border:1px solid var(--line)}
+.modal h3{font-family:var(--r-display);font-weight:500;color:var(--brand)}
+.ind{border-radius:6px}
+.switch button.on-no{background:var(--green);color:#fff}
+.switch button.on-yes{background:var(--red);color:#fff}
+.score-preview{background:var(--cream2);border:1px solid var(--line)}
+.avatar{background:var(--gold);color:var(--brand)}
+.user-row .uname{color:var(--brand)}
+.link{color:var(--gold-deep)}
+.tag-ok{background:var(--green-bg);color:var(--green)}
+.tag-pending{background:var(--yellow-bg);color:var(--yellow)}
+.toast{background:var(--brand);color:var(--cream);border:1px solid var(--gold);font-family:var(--r-mono);font-size:12.5px}
+.pending-wrap{background:linear-gradient(150deg,#0F1B33,#24396B)}
+.empty,.loading{font-family:var(--r-mono);font-size:12.5px}
+.legend-summary{cursor:pointer;font-family:var(--r-display);font-weight:500;font-size:16.5px;color:var(--brand);list-style:none;outline:none;display:flex;align-items:center;gap:8px}
+.legend-summary::-webkit-details-marker{display:none}
+.legend-summary::before{content:"▸";font-family:var(--r-body);font-size:13px;color:var(--gold-deep);transition:transform .15s ease}
+details[open] .legend-summary::before{transform:rotate(90deg)}
+.legend-hint{font-family:var(--r-mono);font-size:11px;color:var(--muted);font-weight:400}
+.excel-tools{display:flex;gap:8px}
 </style>
 </head>
 <body>
 
 <!-- ================= LOGIN / SIGNUP ================= -->
 <div id="loginView">
+  <canvas id="loginDots" class="dotfield"></canvas>
   <div class="login-card">
     <h1>🔍 EWS Tracker</h1>
     <p class="sub">Early Warning Signs — Attrition Risk Monitoring</p>
@@ -151,6 +213,7 @@ td.wrap{white-space:normal;min-width:180px;max-width:280px}
 
 <!-- ================= APP ================= -->
 <div id="appView">
+  <canvas id="appDots"></canvas>
   <div class="topbar">
     <span class="logo">🔍 EWS Tracker</span>
     <div class="tabs" id="navTabs"></div>
@@ -164,6 +227,7 @@ td.wrap{white-space:normal;min-width:180px;max-width:280px}
 <!-- ================= PENDING APPROVAL ================= -->
 <div id="pendingView" style="display:none">
   <div class="pending-wrap">
+    <canvas id="pendingDots" class="dotfield"></canvas>
     <div class="login-card" style="text-align:center">
       <h1>⏳</h1>
       <h1 style="font-size:19px;margin:8px 0">Waiting for Approval</h1>
@@ -265,6 +329,7 @@ let ALL_PROFILES = [];     // admin: all profiles
 let EMPS = [];             // my employees (user view)
 let TEAM_EMPS = {};        // admin: owner id -> employees[]
 let currentTab = "";
+let legendOpen = false;
 let viewingTeamId = null;
 let editingEmpId = null;
 let indState = {};
@@ -441,15 +506,17 @@ function renderDashboard(){
       <tbody>${rows}</tbody></table></div>`}
   </div>
   <div class="card">
-    <h3>📋 Legend</h3>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Status</th><th>Meaning</th><th>Action Required</th></tr></thead>
-      <tbody>
-      <tr><td>${statusBadge("GREEN")}</td><td class="wrap">Employee is engaged and performing well.</td><td class="wrap">Continue regular check-ins and recognition.</td></tr>
-      <tr><td>${statusBadge("YELLOW")}</td><td class="wrap">Mild warning signs present (1–3 indicators).</td><td class="wrap">Schedule 1-on-1 coaching. Document observations.</td></tr>
-      <tr><td>${statusBadge("RED")}</td><td class="wrap">Multiple warning signs (4+ indicators). High flight risk.</td><td class="wrap">Immediate retention conversation. Escalate to HR if needed.</td></tr>
-      <tr><td>${statusBadge("BLACK")}</td><td class="wrap">Confirmed resignation or termination.</td><td class="wrap">Begin transition plan.</td></tr>
-      </tbody></table></div>
+    <details id="legendDetails" ${legendOpen?"open":""} ontoggle="legendOpen=this.open">
+      <summary class="legend-summary">📋 Legend <span class="legend-hint">(click to expand/collapse)</span></summary>
+      <div class="tbl-wrap" style="margin-top:12px"><table>
+        <thead><tr><th>Status</th><th>Meaning</th><th>Action Required</th></tr></thead>
+        <tbody>
+        <tr><td>${statusBadge("GREEN")}</td><td class="wrap">Employee is engaged and performing well.</td><td class="wrap">Continue regular check-ins and recognition.</td></tr>
+        <tr><td>${statusBadge("YELLOW")}</td><td class="wrap">Mild warning signs present (1–3 indicators).</td><td class="wrap">Schedule 1-on-1 coaching. Document observations.</td></tr>
+        <tr><td>${statusBadge("RED")}</td><td class="wrap">Multiple warning signs (4+ indicators). High flight risk.</td><td class="wrap">Immediate retention conversation. Escalate to HR if needed.</td></tr>
+        <tr><td>${statusBadge("BLACK")}</td><td class="wrap">Confirmed resignation or termination.</td><td class="wrap">Begin transition plan.</td></tr>
+        </tbody></table></div>
+    </details>
   </div>`;
 }
 function drillTeam(id){ viewingTeamId=id; document.getElementById("mainContent").innerHTML=renderTeamDrill(); }
@@ -497,7 +564,13 @@ function renderTracker(ownerId, allEmps, readOnly, ownerName){
       <input type="text" placeholder="🔎 Search name, ID, position…" value="${esc(searchQ)}" oninput="searchQ=this.value;refreshTable('${ownerId}',${readOnly})">
       <div class="spacer"></div>
       <button class="btn btn-ghost btn-sm" onclick="exportCSV('${ownerId}')">⬇ Export CSV</button>
-      ${readOnly?"":`<button class="btn btn-primary btn-sm" onclick="openEmpModal()">＋ Add Employee</button>`}
+      ${readOnly?"":`
+      <div class="excel-tools">
+        <button class="btn btn-ghost btn-sm" onclick="downloadEmpTemplate()">📥 Download Template</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('empExcelFile').click()">📤 Upload Filled Excel</button>
+        <input type="file" id="empExcelFile" accept=".xlsx,.xls" style="display:none" onchange="uploadEmpExcel(this)">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openEmpModal()">＋ Add Employee</button>`}
     </div>
     ${allEmps.length===0? `<div class="empty">No employees yet.${readOnly?"":" Click <b>＋ Add Employee</b> to start tracking."}</div>`:`
     <div class="tbl-wrap"><table>
@@ -578,6 +651,73 @@ async function deleteEmployee(id){
   const {error} = await sb.from("employees").delete().eq("id",id);
   if(error){ toast("Delete failed: "+error.message); return; }
   toast("Employee deleted."); render();
+}
+
+/* =============== BULK EXCEL IMPORT/EXPORT =============== */
+const EXCEL_HEADERS = ["Employee Name","Employee ID","Position","Date Hired (YYYY-MM-DD)",
+  ...INDICATORS.map(([,l])=>l+" (YES/NO)"), "With Active CAP? (YES/NO)",
+  "Rating (Last 3 Mo.)", "Confirmed Attrition? (leave blank or type YES)", "TL Notes"];
+function downloadEmpTemplate(){
+  const sample = ["Dela Cruz, Juan","1234567","QA Analyst","2023-06-01",
+    ...INDICATORS.map(()=>"NO"), "NO", "Meets Expectations", "", "Optional notes"];
+  const ws = XLSX.utils.aoa_to_sheet([EXCEL_HEADERS, sample]);
+  ws["!cols"] = EXCEL_HEADERS.map(h=>({wch: Math.max(16, Math.min(30, h.length+2))}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Employees");
+  XLSX.writeFile(wb, "EWS_Employee_Template.xlsx");
+  toast("Template downloaded — fill it out and use Upload Filled Excel.");
+}
+function normYN(v){
+  const s = String(v==null?"":v).trim().toUpperCase();
+  if(["YES","Y","TRUE","1"].includes(s)) return "YES";
+  return "NO";
+}
+async function uploadEmpExcel(input){
+  const file = input.files[0]; if(!file) return;
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:"array"});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, {defval:""});
+    if(raw.length===0){ toast("No rows found in that file."); input.value=""; return; }
+    const keyOf = (row, wanted) => {
+      const k = Object.keys(row).find(k2=>k2.trim().toLowerCase().startsWith(wanted.toLowerCase()));
+      return k? row[k] : "";
+    };
+    const toInsert = [];
+    let skipped = 0;
+    raw.forEach(row=>{
+      const name = String(keyOf(row,"Employee Name")||"").trim();
+      const empid = String(keyOf(row,"Employee ID")||"").trim();
+      if(!name || !empid){ skipped++; return; }
+      const ind = {};
+      INDICATORS.forEach(([k,l])=>{ ind[k] = normYN(keyOf(row, l)); });
+      const attritionRaw = String(keyOf(row,"Confirmed Attrition")||"").trim().toUpperCase();
+      let hired = keyOf(row,"Date Hired");
+      if(hired instanceof Date) hired = hired.toISOString().slice(0,10);
+      else hired = String(hired||"").trim();
+      toInsert.push({
+        owner: PROFILE.id, name, empid,
+        pos: String(keyOf(row,"Position")||"").trim(),
+        hired,
+        ind,
+        cap: normYN(keyOf(row,"With Active CAP")),
+        rating: String(keyOf(row,"Rating")||"").trim(),
+        attrition: (attritionRaw==="YES"||attritionRaw==="BLACK")? "BLACK" : "",
+        notes: String(keyOf(row,"TL Notes")||"").trim(),
+        updated_at: new Date().toISOString()
+      });
+    });
+    if(toInsert.length===0){ toast("No valid rows — each row needs Employee Name and Employee ID."); input.value=""; return; }
+    const {error} = await sb.from("employees").insert(toInsert);
+    input.value="";
+    if(error){ toast("Import failed: "+error.message); return; }
+    toast(`Imported ${toInsert.length} employee(s)${skipped?`, skipped ${skipped} incomplete row(s)`:""} ✓`);
+    render();
+  }catch(e){
+    toast("Could not read that file — make sure it's a .xlsx from the template.");
+    input.value="";
+  }
 }
 
 /* =============== ADMIN: USERS =============== */
@@ -860,6 +1000,60 @@ function exportCSV(ownerId){
   a.download="EWS_"+String(teamName).replace(/\W+/g,"_")+".csv"; a.click();
 }
 function csvCell(v){ v=String(v==null?"":v); return /[",\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+
+/* =============== DOT-FIELD EFFECT =============== */
+function startDotField(canvas, color, baseAlpha){
+  const ctx = canvas.getContext("2d");
+  let dots = [];
+  function build(){
+    const w = canvas.offsetWidth, h = canvas.offsetHeight;
+    if(!w || !h){ dots = []; return; }
+    canvas.width = w; canvas.height = h;
+    dots = [];
+    const sp = 26;
+    const cols = Math.ceil(w/sp)+1, rows = Math.ceil(h/sp)+1;
+    const nc = Math.max(6, Math.round(cols*rows/170));
+    const centers = Array.from({length:nc}, () => ({
+      x: Math.random()*cols, y: Math.random()*rows, r: 2.5+Math.random()*6.5
+    }));
+    for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){
+      const inC = centers.some(c => (i-c.x)*(i-c.x)+(j-c.y)*(j-c.y) < c.r*c.r);
+      if(inC && Math.random()<0.72){
+        dots.push({ x:i*sp+6, y:j*sp+6, ph:Math.random()*Math.PI*2,
+          spd:0.4+Math.random()*1.1, glint:0, gv:Math.random()<0.5 });
+      }
+    }
+  }
+  build();
+  function frame(t){
+    if(canvas.width !== canvas.offsetWidth && canvas.offsetWidth) build();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = color;
+    for(const d of dots){
+      const tw = (Math.sin(t/1000*d.spd + d.ph)+1)/2;
+      if(d.glint > 0){
+        d.glint -= 16;
+        ctx.globalAlpha = Math.min(1, baseAlpha*2.2);
+        if(d.gv) ctx.fillRect(d.x-0.6, d.y-5, 1.2, 10);
+        else ctx.fillRect(d.x-5, d.y-0.6, 10, 1.2);
+      } else {
+        ctx.globalAlpha = baseAlpha*(0.2+0.8*tw);
+        ctx.fillRect(d.x-1, d.y-1, 2, 2);
+        if(Math.random() < 0.00045){ d.glint = 300+Math.random()*500; d.gv = Math.random()<0.5; }
+      }
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  window.addEventListener("resize", build);
+  return { rebuild: build };
+}
+const DOTS = {
+  login:   startDotField(document.getElementById("loginDots"),  "#C6A15B", 0.85),
+  pending: startDotField(document.getElementById("pendingDots"),"#C6A15B", 0.85),
+  app:     startDotField(document.getElementById("appDots"),    "#0F1B33", 0.20)
+};
 
 /* =============== INIT =============== */
 if(!CONFIGURED) document.getElementById("setupBanner").style.display="block";
