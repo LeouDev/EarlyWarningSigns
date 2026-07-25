@@ -135,8 +135,18 @@ td.wrap{white-space:normal;min-width:180px;max-width:280px;text-align:center}
 @media(max-width:980px){.trend-grid{grid-template-columns:1fr !important}}
 
 /* ---------- MBO2 THEME OVERRIDES (navy · cream · gold) ---------- */
-#loginView{background:linear-gradient(150deg,#0F1B33 0%,#182A4D 55%,#24396B 100%);position:relative;overflow:hidden}
+#loginView{background:linear-gradient(150deg,#0F1B33 0%,#182A4D 55%,#24396B 100%);position:relative;overflow:hidden;display:flex;align-items:stretch;justify-content:center}
 .dotfield{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.login-col{flex:none;width:100%;display:flex;align-items:center;justify-content:center;padding:20px;position:relative;z-index:1}
+.walk-col{flex:1 1 55%;position:relative;border-left:1px solid rgba(255,255,255,.08);display:none}
+.walk-col iframe{width:100%;height:100%;border:none;display:block}
+@media (min-width:900px){
+  .login-col{flex:0 0 45%;max-width:520px}
+  .walk-col{display:block}
+}
+@media (max-width:899px){
+  .walk-col{display:none}
+}
 #appDots{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .main{position:relative;z-index:1}
 .login-card{border-radius:8px;border:1px solid var(--line);box-shadow:0 24px 70px rgba(0,0,0,.45);position:relative;z-index:1}
@@ -223,6 +233,7 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
 <!-- ================= LOGIN / SIGNUP ================= -->
 <div id="loginView">
   <canvas id="loginDots" class="dotfield"></canvas>
+  <div class="login-col">
   <div class="login-card">
     <h1>🔍 EWS Tracker</h1>
     <p class="sub">Early Warning Signs — Attrition Risk Monitoring</p>
@@ -249,6 +260,10 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
       <div class="ok-msg" id="signupOk"></div>
       <div class="login-toggle">Already have an account? <a onclick="showSignup(false)">Sign in</a></div>
     </div>
+  </div>
+  </div>
+  <div class="walk-col">
+    <iframe src="EWS_Tracker_Walkthrough.html" title="How to Use EWS Tracker"></iframe>
   </div>
 </div>
 
