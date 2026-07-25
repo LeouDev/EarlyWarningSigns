@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#F6F1E4; --card:#ffffff; --ink:#1B1E27; --muted:#5B5F6B; --line:#DED4B9;
@@ -91,6 +92,11 @@ td.wrap{white-space:normal;min-width:180px;max-width:280px;text-align:center}
 .yn-no{color:#9ca3af}
 .score-pill{display:inline-block;min-width:28px;text-align:center;padding:3px 8px;border-radius:6px;font-weight:700}
 .row-actions button{margin-right:4px}
+.row-menu{position:fixed;z-index:300;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 40px rgba(15,27,51,.22);min-width:200px;padding:5px;overflow:hidden}
+.row-menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;padding:9px 12px;font-size:12.5px;border-radius:7px;color:var(--ink)}
+.row-menu button:hover{background:var(--cream2)}
+.row-menu button.danger{color:var(--red)}
+.row-menu button.danger:hover{background:var(--red-bg)}
 .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .toolbar input[type=text]{padding:9px 12px;border:1px solid var(--line);border-radius:8px;min-width:240px}
 .toolbar .spacer{flex:1}
@@ -126,6 +132,7 @@ td.wrap{white-space:normal;min-width:180px;max-width:280px;text-align:center}
 .toast.show{opacity:1}
 .pending-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1f3a8a,#5f3dc4);padding:20px}
 @media(max-width:760px){.grid2,.grid3,.ind-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.trend-grid{grid-template-columns:1fr !important}}
 
 /* ---------- MBO2 THEME OVERRIDES (navy · cream · gold) ---------- */
 #loginView{background:linear-gradient(150deg,#0F1B33 0%,#182A4D 55%,#24396B 100%);position:relative;overflow:hidden}
@@ -498,6 +505,21 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
   </div>
 </div>
 
+<!-- ================= TRANSFER EMPLOYEE MODAL ================= -->
+<div class="modal-bg" id="transferModalBg">
+  <div class="modal" style="width:420px">
+    <h3>🔁 Transfer Employee</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Transferring <b id="tf_empName" style="color:var(--ink)"></b>. The receiving team lead must approve before this employee moves off your roster.</p>
+    <div class="field"><label>Transfer To</label><select id="tf_target"></select></div>
+    <div class="field"><label>Note (optional)</label><textarea id="tf_note" rows="2" placeholder="Reason for transfer…"></textarea></div>
+    <div class="err" id="tf_err" style="color:var(--red);font-size:12.5px;min-height:16px"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('transferModalBg')">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="sendTransferBtn" onclick="sendTransferRequest()">Send Request</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= HEADCOUNT MODAL ================= -->
 <div class="modal-bg" id="hcModalBg">
   <div class="modal" style="width:560px">
@@ -570,6 +592,8 @@ let PROFILE = null;        // my profile row
 let ALL_PROFILES = [];     // admin: all profiles
 let EMPS = [];             // my employees (user view)
 let TEAM_EMPS = {};        // admin: owner id -> employees[]
+let PEERS = [];            // other approved team leads (for transfer target picker)
+let ALL_TRANSFERS = [];    // transfer requests visible to me (incoming + outgoing)
 let currentTab = "";
 let legendOpen = false;
 let dashStatusFilter = null;
@@ -680,8 +704,8 @@ async function enterApp(){
 }
 function buildTabs(){
   const tabs = PROFILE.role==="admin"
-    ? [["dashboard","📊 Dashboard"],["headcount","📈 Headcount"],["attrition","⚫ Permanent Attrition"],["performer","🚦 Performer"],["users","👥 Users"],["settings","⚙️ Settings"]]
-    : [["myteam","📋 My Team"],["headcount","📈 Headcount"],["attrition","⚫ Permanent Attrition"],["settings","⚙️ Settings"]];
+    ? [["dashboard","📊 Dashboard"],["headcount","📈 Headcount"],["attrition","⚫ Permanent Attrition"],["trends","📉 Trends"],["performer","🚦 Performer"],["users","👥 Users"],["settings","⚙️ Settings"]]
+    : [["myteam","📋 My Team"],["headcount","📈 Headcount"],["attrition","⚫ Permanent Attrition"],["trends","📉 Trends"],["settings","⚙️ Settings"]];
   document.getElementById("navTabs").innerHTML =
     tabs.map(([id,lbl])=>`<button id="tab_${id}" onclick="navigate('${id}')">${lbl}</button>`).join("");
 }
@@ -731,13 +755,15 @@ async function render(){
       if(currentTab==="dashboard"){ await loadAdminData(); el.innerHTML = viewingTeamId? renderTeamDrill() : (dashStatusFilter? renderStatusDrill() : renderDashboard()); }
       else if(currentTab==="headcount"){ await loadAdminData(); await loadHc(true); el.innerHTML = renderHeadcount(); }
       else if(currentTab==="attrition"){ await loadAdminData(); el.innerHTML = renderAttrition(true); }
+      else if(currentTab==="trends"){ await loadAdminData(); await loadHc(true); await loadSnapshots(true); el.innerHTML = renderTrends(true); drawTrendCharts(true); }
       else if(currentTab==="performer"){ await loadAdminData(); el.innerHTML = renderPerformer(); }
       else if(currentTab==="users"){ await loadAdminData(); el.innerHTML = renderUsers(); }
       else el.innerHTML = renderSettings();
     } else {
-      if(currentTab==="myteam"){ await loadMyEmployees(); el.innerHTML = renderTracker(PROFILE.id, EMPS, false); }
+      if(currentTab==="myteam"){ await loadMyEmployees(); await loadPeers(); await loadTransfers(); captureSnapshot(); el.innerHTML = renderTracker(PROFILE.id, EMPS, false); }
       else if(currentTab==="headcount"){ await loadHc(false); el.innerHTML = renderHeadcount(); }
       else if(currentTab==="attrition"){ await loadMyEmployees(); el.innerHTML = renderAttrition(false); }
+      else if(currentTab==="trends"){ await loadMyEmployees(); await loadHc(false); await captureSnapshot(); await loadSnapshots(false); el.innerHTML = renderTrends(false); drawTrendCharts(false); }
       else el.innerHTML = renderSettings();
     }
   }catch(e){ el.innerHTML=`<div class="empty">⚠️ ${esc(e.message||"Failed to load data.")}</div>`; }
@@ -749,6 +775,17 @@ async function loadMyEmployees(){
   if(error) throw error;
   EMPS = data||[];
 }
+async function loadPeers(){
+  const {data, error} = await sb.from("profiles").select("id,name,username,role,approved").eq("role","user").eq("approved",true);
+  if(error) throw error;
+  PEERS = (data||[]).filter(p=>p.id!==PROFILE.id);
+}
+async function loadTransfers(){
+  const {data, error} = await sb.from("transfer_requests").select("*, employees(name,empid,pos)").order("requested_at",{ascending:false});
+  if(error) throw error;
+  ALL_TRANSFERS = data||[];
+}
+function peerName(id){ const p=PEERS.find(x=>x.id===id); return p?(p.name||p.username):"—"; }
 async function loadAdminData(){
   const [{data:profs, error:e1},{data:emps, error:e2}] = await Promise.all([
     sb.from("profiles").select("*").order("created_at"),
@@ -904,20 +941,24 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
   });
   const c={GREEN:0,YELLOW:0,RED:0,BLACK:0};
   allEmps.forEach(e=>c[calcStatus(e)]++);
+  const incoming = readOnly? [] : ALL_TRANSFERS.filter(t=>t.to_owner===PROFILE.id && t.status==="pending");
+  const outgoingPending = readOnly? [] : ALL_TRANSFERS.filter(t=>t.from_owner===PROFILE.id && t.status==="pending");
+  const pendingFor = empId => outgoingPending.find(t=>t.employee_id===empId);
   const indHeads=INDICATORS.map(([,l])=>`<th>${esc(l).replace(/ in /," in<br>").replace(/ with /," with<br>").replace(/ from /," from<br>")}</th>`).join("");
   const rows=emps.map((e,i)=>{
     const st=calcStatus(e), sc=calcScore(e);
     const scBg = st==="GREEN"?"var(--green-bg)":st==="YELLOW"?"var(--yellow-bg)":st==="RED"?"var(--red-bg)":"var(--black-bg)";
     const indCells=INDICATORS.map(([k])=>`<td style="text-align:center" class="${(e.ind&&e.ind[k])==="YES"?"yn-yes":"yn-no"}">${(e.ind&&e.ind[k])||"NO"}</td>`).join("");
-    return `<tr>
+    const pend = readOnly? null : pendingFor(e.id);
+    return `<tr ${readOnly?"":`ondblclick="openEmpModal('${e.id}')" style="cursor:pointer" title="Double-click to edit"`}>
       <td>${i+1}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.empid)}</td><td>${esc(e.pos)}</td><td>${esc(e.hired)}</td>
       <td>${statusBadge(st)}${leaveBadge(e)}</td>${indCells}
       <td style="text-align:center" class="${e.cap==="YES"?"yn-yes":"yn-no"}">${e.cap||"NO"}</td>
       <td style="text-align:center"><span class="score-pill" style="background:${scBg}">${sc}</span></td>
       <td>${esc(e.rating)}</td><td class="wrap">${esc(e.notes)}</td>${readOnly?"":`<td>${fmtDate(e.updated_at)}</td>`}
-      ${readOnly?"":`<td class="row-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openEmpModal('${e.id}')">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}</tr>`;
+      ${readOnly?"":`<td class="row-actions" style="white-space:nowrap">
+        ${pend? `<span class="badge" style="background:var(--yellow-bg);color:var(--gold-deep)" title="Awaiting approval from ${esc(peerName(pend.to_owner))}">🔁 Pending</span> `:""}
+        <button class="btn btn-ghost btn-sm" title="Actions" onclick="showEmpMenu(event,'${e.id}',true)">⋯</button></td>`}</tr>`;
   }).join("");
   return `
   <h2 class="page-title">🔍 Early Warning Signs Tracker — ${esc(ownerName || PROFILE.name || displayHandle(PROFILE))}</h2>
@@ -928,6 +969,17 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
     <div class="stat s-red"><div class="num">${c.RED}</div><div class="lbl">🔴 Red</div></div>
     <div class="stat s-black"><div class="num">${attrittedCount}</div><div class="lbl">⚫ Permanent Attrition</div></div>
   </div>
+  ${incoming.length? `<div class="card" style="border-color:var(--gold);background:var(--cream2)">
+    <h3>📥 Incoming Transfer Request${incoming.length===1?"":"s"} (${incoming.length})</h3>
+    ${incoming.map(t=>`<div class="user-row">
+      <div class="avatar">🔁</div>
+      <div><div class="uname">${esc(t.employees?t.employees.name:"Employee")}</div>
+      <div class="usub">From ${esc(peerName(t.from_owner))}${t.employees&&t.employees.pos?" · "+esc(t.employees.pos):""}${t.note?` · "${esc(t.note)}"`:""}</div></div>
+      <div class="spacer"></div>
+      <button class="btn btn-green btn-sm" onclick="respondTransfer('${t.id}', true)">✓ Approve</button>
+      <button class="btn btn-danger btn-sm" onclick="respondTransfer('${t.id}', false)">✕ Decline</button>
+    </div>`).join("")}
+  </div>`:""}
   <div class="card">
     <div class="toolbar">
       <input type="text" placeholder="🔎 Search name, ID, position…" value="${esc(searchQ)}" oninput="searchQ=this.value;refreshTable('${ownerId}',${readOnly})">
@@ -1035,6 +1087,83 @@ async function deleteEmployee(id){
   const {error} = await sb.from("employees").delete().eq("id",id);
   if(error){ toast("Delete failed: "+error.message); return; }
   toast("Employee deleted."); render();
+}
+
+/* =============== ROW ACTIONS DROPDOWN =============== */
+let openMenuEl = null;
+function closeRowMenu(){ if(openMenuEl){ openMenuEl.remove(); openMenuEl = null; } }
+document.addEventListener("click", closeRowMenu);
+window.addEventListener("scroll", closeRowMenu, true);
+function showRowMenu(ev, items){
+  ev.stopPropagation();
+  const wasOpen = openMenuEl;
+  closeRowMenu();
+  if(wasOpen && wasOpen.dataset.src === ev.currentTarget.outerHTML) return;
+  const menu = document.createElement("div");
+  menu.className = "row-menu";
+  menu.innerHTML = items.map(it=>
+    `<button class="${it.danger?"danger":""}" onclick="closeRowMenu();${it.action}">${it.icon} ${esc(it.label)}</button>`).join("");
+  menu.addEventListener("click", e=>e.stopPropagation());
+  document.body.appendChild(menu);
+  const r = ev.currentTarget.getBoundingClientRect();
+  const mw = menu.offsetWidth || 200, mh = menu.offsetHeight || 120;
+  menu.style.left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8)) + "px";
+  menu.style.top = (r.bottom + mh + 8 > window.innerHeight ? r.top - mh - 4 : r.bottom + 4) + "px";
+  openMenuEl = menu;
+}
+function showEmpMenu(ev, empId, allowTransfer){
+  const items = [{icon:"✏️", label:"Edit", action:`openEmpModal('${empId}')`}];
+  if(allowTransfer){
+    const pend = ALL_TRANSFERS.find(t=>t.employee_id===empId && t.from_owner===PROFILE.id && t.status==="pending");
+    if(pend) items.push({icon:"✕", label:"Cancel transfer to "+peerName(pend.to_owner), action:`cancelTransfer('${pend.id}')`});
+    else items.push({icon:"🔁", label:"Transfer to another user", action:`openTransferModal('${empId}')`});
+  }
+  items.push({icon:"🗑", label:"Delete", action:`deleteEmployee('${empId}')`, danger:true});
+  showRowMenu(ev, items);
+}
+
+/* =============== TRANSFER EMPLOYEE =============== */
+let transferEmpId = null;
+function openTransferModal(empId){
+  const e = EMPS.find(x=>x.id===empId); if(!e) return;
+  transferEmpId = empId;
+  document.getElementById("tf_empName").textContent = e.name;
+  document.getElementById("tf_note").value = "";
+  document.getElementById("tf_err").textContent = "";
+  const sel = document.getElementById("tf_target");
+  sel.innerHTML = PEERS.length
+    ? PEERS.map(p=>`<option value="${p.id}">${esc(p.name||p.username)}</option>`).join("")
+    : `<option value="">No other users available yet</option>`;
+  document.getElementById("transferModalBg").classList.add("open");
+}
+async function sendTransferRequest(){
+  const target = document.getElementById("tf_target").value;
+  const err = document.getElementById("tf_err");
+  if(!target){ err.textContent = "No target user selected."; return; }
+  const note = document.getElementById("tf_note").value.trim();
+  const btn = document.getElementById("sendTransferBtn");
+  btn.disabled = true; btn.textContent = "Sending…";
+  const {error} = await sb.from("transfer_requests").insert({
+    employee_id: transferEmpId, from_owner: PROFILE.id, to_owner: target, note
+  });
+  btn.disabled = false; btn.textContent = "Send Request";
+  if(error){ err.textContent = "Failed: "+error.message; return; }
+  closeModal("transferModalBg");
+  toast("Transfer request sent — waiting for approval.");
+  render();
+}
+async function cancelTransfer(reqId){
+  if(!confirm("Cancel this pending transfer request?")) return;
+  const {error} = await sb.from("transfer_requests").update({status:"cancelled"}).eq("id",reqId);
+  if(error){ toast("Failed: "+error.message); return; }
+  toast("Transfer request cancelled."); render();
+}
+async function respondTransfer(reqId, approve){
+  if(approve && !confirm("Approve this transfer? The employee will be added to your team.")) return;
+  const {error} = await sb.rpc("respond_transfer", {p_request_id: reqId, p_approve: approve});
+  if(error){ toast("Failed: "+error.message); return; }
+  toast(approve? "Employee added to your team ✓" : "Transfer declined.");
+  render();
 }
 
 /* =============== BULK EXCEL IMPORT/EXPORT =============== */
@@ -1341,7 +1470,7 @@ function renderAttrition(isAdmin){
   if(ATTR_MONTH!=="all") list = list.filter(e=>monthKey(e.attrition_date||e.updated_at)===ATTR_MONTH);
   list.sort((a,b)=> new Date(b.attrition_date||b.updated_at) - new Date(a.attrition_date||a.updated_at));
   const showTeamCol = isAdmin && ATTR_TEAM==="all";
-  const rows = list.map((e,i)=>`<tr>
+  const rows = list.map((e,i)=>`<tr ${isAdmin?"":`ondblclick="openEmpModal('${e.id}')" style="cursor:pointer" title="Double-click to edit"`}>
     <td>${i+1}</td>
     <td><b>${esc(e.name)}</b></td>
     <td>${esc(e.empid)}</td>
@@ -1353,8 +1482,7 @@ function renderAttrition(isAdmin){
     <td>${esc(e.rating)}</td>
     <td class="wrap">${esc(e.notes)}</td>
     ${isAdmin?"":`<td class="row-actions">
-        <button class="btn btn-ghost btn-sm" title="Edit / Restore to active roster" onclick="openEmpModal('${e.id}')">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}
+        <button class="btn btn-ghost btn-sm" title="Actions" onclick="showEmpMenu(event,'${e.id}',false)">⋯</button></td>`}
   </tr>`).join("");
   return `
   <h2 class="page-title">⚫ Permanent Attrition ${isAdmin? "Register — All Teams" : "— "+esc(PROFILE.name||displayHandle(PROFILE))}</h2>
@@ -1400,7 +1528,7 @@ function renderLeaveRegister(isAdmin){
   const rows = list.map((e,i)=>{
     const m = LEAVE_META[e.attrition];
     const overdue = e.leave_return && e.leave_return < today;
-    return `<tr>
+    return `<tr ${isAdmin?"":`ondblclick="openEmpModal('${e.id}')" style="cursor:pointer" title="Double-click to edit"`}>
     <td>${i+1}</td>
     <td><b>${esc(e.name)}</b></td>
     <td>${esc(e.empid)}</td>
@@ -1412,8 +1540,7 @@ function renderLeaveRegister(isAdmin){
     <td>${overdue? `<span class="badge b-RED">⚠ Return Overdue</span>` : `<span class="badge b-GREEN">🌿 On Leave</span>`}</td>
     <td class="wrap">${esc(e.notes)}</td>
     ${isAdmin?"":`<td class="row-actions">
-        <button class="btn btn-ghost btn-sm" title="Edit / End Leave" onclick="openEmpModal('${e.id}')">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}
+        <button class="btn btn-ghost btn-sm" title="Actions" onclick="showEmpMenu(event,'${e.id}',false)">⋯</button></td>`}
   </tr>`;}).join("");
   return `
   <div class="card">
@@ -1518,6 +1645,177 @@ function renderPerformer(){
     ${noData.map(x=>`<div class="user-row"><div class="avatar">${esc((x.p.name||displayHandle(x.p)).split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase())}</div>
     <div><div class="uname">${esc(x.p.name||displayHandle(x.p))}</div><div class="usub">@${esc(displayHandle(x.p))} · approved but has not added any employees</div></div></div>`).join("")}
   </div>`:""}`;
+}
+
+/* =============== TRENDS =============== */
+let SNAPSHOTS = [];
+let TR_TEAM = "all";
+let snapCaptured = false;
+let trendCharts = [];
+
+async function loadSnapshots(isAdmin){
+  let q = sb.from("risk_snapshots").select("*").order("snap_date");
+  if(!isAdmin) q = q.eq("owner", PROFILE.id);
+  const {data, error} = await q;
+  if(error) throw error;
+  SNAPSHOTS = data||[];
+}
+async function captureSnapshot(){
+  if(snapCaptured || PROFILE.role==="admin" || !PROFILE.approved) return;
+  snapCaptured = true;
+  const active = EMPS.filter(e=>e.attrition!=="BLACK");
+  const c = {GREEN:0, YELLOW:0, RED:0};
+  active.forEach(e=>c[calcStatus(e)]++);
+  const black = EMPS.filter(e=>e.attrition==="BLACK").length;
+  await sb.from("risk_snapshots").upsert({
+    owner: PROFILE.id, snap_date: new Date().toISOString().slice(0,10),
+    green: c.GREEN, yellow: c.YELLOW, red: c.RED, black
+  }, {onConflict:"owner,snap_date"});
+}
+
+function trendEmployees(isAdmin){
+  if(!isAdmin) return EMPS;
+  const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+  const scope = TR_TEAM==="all"? tls : tls.filter(p=>p.id===TR_TEAM);
+  let out = [];
+  scope.forEach(p=>{ out = out.concat(TEAM_EMPS[p.id]||[]); });
+  return out;
+}
+function trendHcRows(isAdmin){
+  if(!isAdmin) return HC_ALL;
+  return TR_TEAM==="all"? HC_ALL : HC_ALL.filter(r=>r.owner===TR_TEAM);
+}
+function trendAttritionByMonth(isAdmin, year){
+  const hc = trendHcRows(isAdmin);
+  const vol = Array(12).fill(0), invol = Array(12).fill(0), black = Array(12).fill(0);
+  hc.filter(r=>r.year===year).forEach(r=>{ vol[r.month-1]+=num(r.vol_attr); invol[r.month-1]+=num(r.invol_attr); });
+  trendEmployees(isAdmin).forEach(e=>{
+    if(e.attrition==="BLACK" && e.attrition_date && String(e.attrition_date).slice(0,4)==String(year)){
+      const m = parseInt(String(e.attrition_date).slice(5,7),10);
+      if(m>=1 && m<=12) black[m-1]++;
+    }
+  });
+  return {vol, invol, black};
+}
+function trendClosingHc(isAdmin, year){
+  const hc = trendHcRows(isAdmin);
+  const owners = [...new Set(hc.map(r=>r.owner))];
+  if(owners.length===0) return Array(12).fill(0);
+  const chains = owners.map(o=>hcChain(hc.filter(r=>r.owner===o), year));
+  return Array.from({length:12}, (_,i)=> chains.reduce((a,ch)=>a+ch[i].closing, 0));
+}
+function trendIndicatorPareto(isAdmin){
+  const emps = trendEmployees(isAdmin).filter(e=>e.attrition!=="BLACK");
+  const counts = INDICATORS.map(([k,l])=>({label:l, n: emps.filter(e=>e.ind && e.ind[k]==="YES").length}));
+  return counts.filter(c=>c.n>0).sort((a,b)=>b.n-a.n);
+}
+function trendSnapshotSeries(isAdmin){
+  let snaps = SNAPSHOTS;
+  if(isAdmin && TR_TEAM!=="all") snaps = snaps.filter(s=>s.owner===TR_TEAM);
+  const byDate = {};
+  snaps.forEach(s=>{
+    const d = String(s.snap_date).slice(0,10);
+    if(!byDate[d]) byDate[d] = {green:0, yellow:0, red:0};
+    byDate[d].green += s.green; byDate[d].yellow += s.yellow; byDate[d].red += s.red;
+  });
+  const dates = Object.keys(byDate).sort();
+  return {dates, green:dates.map(d=>byDate[d].green), yellow:dates.map(d=>byDate[d].yellow), red:dates.map(d=>byDate[d].red)};
+}
+
+function renderTrends(isAdmin){
+  const teamSel = isAdmin? `<select onchange="TR_TEAM=this.value;render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">
+      <option value="all" ${TR_TEAM==="all"?"selected":""}>All Teams</option>
+      ${ALL_PROFILES.filter(p=>p.role!=="admin"&&p.approved).map(p=>`<option value="${p.id}" ${TR_TEAM===p.id?"selected":""}>${esc(p.name||displayHandle(p))}</option>`).join("")}
+    </select>`:"";
+  const yearOpts=[2025,2026,2027].map(y=>`<option value="${y}" ${y===HC_YEAR?"selected":""}>${y}</option>`).join("");
+  return `
+  <h2 class="page-title">📉 Trends — ${isAdmin? (TR_TEAM==="all"?"All Teams":esc(peerNameOrProfile(TR_TEAM))) : esc(PROFILE.name||displayHandle(PROFILE))}</h2>
+  <div class="card">
+    <div class="toolbar">
+      ${teamSel}
+      <select onchange="HC_YEAR=parseInt(this.value);render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">${yearOpts}</select>
+      <div class="spacer"></div>
+      <span style="font-family:var(--r-mono);font-size:11px;color:var(--muted)">Attrition & headcount use ${HC_YEAR} · risk history uses snapshots</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" class="trend-grid">
+    <div class="card"><h3>Monthly Attrition — Voluntary vs Involuntary${TR_TEAM==="all"&&isAdmin?" (All Teams)":""}</h3><div style="height:260px"><canvas id="chAttr"></canvas></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Bars come from Headcount tab monthly entries. The line is confirmed BLACK attritions by attrition date.</p></div>
+    <div class="card"><h3>Closing Headcount by Month</h3><div style="height:260px"><canvas id="chHc"></canvas></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Month-end headcount from the Headcount tab. A falling line = shrinking org.</p></div>
+    <div class="card"><h3>Top Warning Indicators (Current)</h3><div style="height:260px"><canvas id="chPareto"></canvas></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">How many active employees currently have each indicator flagged YES. Fix the biggest bars first.</p></div>
+    <div class="card"><h3>Risk Mix Over Time</h3><div style="height:260px"><canvas id="chRisk"></canvas></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Daily snapshots of 🟢/🟡/🔴 counts, captured automatically when team leads open the app. History builds up from today onward.</p></div>
+  </div>`;
+}
+function peerNameOrProfile(id){ const p=ALL_PROFILES.find(x=>x.id===id); return p?(p.name||displayHandle(p)):"Team"; }
+function chartLibFail(){
+  ["chAttr","chHc","chPareto","chRisk"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && el.parentElement) el.parentElement.innerHTML =
+      '<div class="empty">⚠️ Chart library could not load (network/CDN blocked). Check your connection or firewall, then refresh.</div>';
+  });
+}
+
+let chartLibRetried = false;
+function drawTrendCharts(isAdmin){
+  if(typeof Chart==="undefined"){
+    if(!chartLibRetried){
+      chartLibRetried = true;
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js";
+      s.onload = ()=>drawTrendCharts(isAdmin);
+      s.onerror = ()=>chartLibFail();
+      document.head.appendChild(s);
+    } else chartLibFail();
+    return;
+  }
+  trendCharts.forEach(c=>{ try{c.destroy();}catch(_){} });
+  trendCharts = [];
+  const gold="#C6A15B", navy="#0F1B33", green="#4A6B52", yellow="#B08328", red="#A9463A";
+  Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = "#5B5F6B";
+
+  const at = trendAttritionByMonth(isAdmin, HC_YEAR);
+  const el1 = document.getElementById("chAttr");
+  if(el1) trendCharts.push(new Chart(el1, {
+    data:{ labels:MONTHS, datasets:[
+      {type:"bar", label:"Voluntary", data:at.vol, backgroundColor:yellow, stack:"a"},
+      {type:"bar", label:"Involuntary", data:at.invol, backgroundColor:red, stack:"a"},
+      {type:"line", label:"Confirmed (BLACK)", data:at.black, borderColor:navy, backgroundColor:navy, tension:.3, pointRadius:3}
+    ]},
+    options:{maintainAspectRatio:false, scales:{x:{stacked:true,grid:{display:false}}, y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}
+  }));
+
+  const hcLine = trendClosingHc(isAdmin, HC_YEAR);
+  const el2 = document.getElementById("chHc");
+  if(el2) trendCharts.push(new Chart(el2, {
+    type:"line",
+    data:{ labels:MONTHS, datasets:[{label:"Closing HC", data:hcLine, borderColor:gold, backgroundColor:"rgba(198,161,91,.15)", fill:true, tension:.3, pointRadius:3}]},
+    options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}}, y:{beginAtZero:true,ticks:{precision:0}}}}
+  }));
+
+  const pareto = trendIndicatorPareto(isAdmin);
+  const el3 = document.getElementById("chPareto");
+  if(el3) trendCharts.push(new Chart(el3, {
+    type:"bar",
+    data:{ labels: pareto.length? pareto.map(p=>p.label):["No indicators flagged"], datasets:[{label:"Employees flagged", data: pareto.length? pareto.map(p=>p.n):[0], backgroundColor:navy}]},
+    options:{indexAxis:"y", maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true,ticks:{precision:0}}, y:{grid:{display:false}}}}
+  }));
+
+  const rs = trendSnapshotSeries(isAdmin);
+  const el4 = document.getElementById("chRisk");
+  if(el4) trendCharts.push(new Chart(el4, {
+    type:"line",
+    data:{ labels: rs.dates.length? rs.dates:["No snapshots yet"], datasets:[
+      {label:"🟢 Green", data:rs.green, borderColor:green, backgroundColor:"rgba(74,107,82,.25)", fill:true, tension:.25, pointRadius:2},
+      {label:"🟡 Yellow", data:rs.yellow, borderColor:yellow, backgroundColor:"rgba(176,131,40,.25)", fill:true, tension:.25, pointRadius:2},
+      {label:"🔴 Red", data:rs.red, borderColor:red, backgroundColor:"rgba(169,70,58,.25)", fill:true, tension:.25, pointRadius:2}
+    ]},
+    options:{maintainAspectRatio:false, scales:{x:{grid:{display:false}}, y:{beginAtZero:true,stacked:true,ticks:{precision:0}}}}
+  }));
 }
 
 /* =============== SETTINGS =============== */
