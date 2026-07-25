@@ -562,10 +562,9 @@ let sb = null;
 if (CONFIGURED) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const POSITIONS = [
-  "OCN","Outreach","B vs D","EDITS","C&S Pharma Admin","C&S Appeals Verification",
-  "AV Commercial","Clinical Appeals","A&M - Cancellation WB","A&M - Cancellation SP",
-  "A&M - Live","Outreach Denial","OBD Phone","PartD_Phones","Gen_Phones","Fax",
-  "GLP_1","UHC_west","Clinical Appeals Phone","Misroutes","CE","SME","Escalation"
+  "OCN","Outreach","B vs D","EDITS","C&S","Appeals Verification","Clinical Appeals",
+  "Adherence & Monitoring","Outbound Denial","Part_D Tech","Gen_PA Tech","GLP_1",
+  "UHC_west","Misroutes","CE","SME","Escalation","WFM/RTA"
 ];
 function populatePositionSelect(currentVal){
   const sel = document.getElementById("f_pos");
