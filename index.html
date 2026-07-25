@@ -1837,6 +1837,11 @@ function renderSettings(){
   return `
   <h2 class="page-title">⚙️ Settings</h2>
   <div class="card" style="max-width:520px">
+    <h3>Team Name</h3>
+    <div class="field"><label>Full Name / Team Label</label><input id="cp_name" placeholder="e.g. Aida Marie Rodriguez" value="${esc(PROFILE.name||"")}"></div>
+    <button class="btn btn-primary btn-sm" onclick="changeName()">Update Team Name</button>
+  </div>
+  <div class="card" style="max-width:520px">
     <h3>Change My Password</h3>
     <div class="field"><label>New Password</label><input id="cp_new" type="password" placeholder="Min. 6 characters"></div>
     <button class="btn btn-primary btn-sm" onclick="changePass()">Update Password</button>
@@ -1845,6 +1850,17 @@ function renderSettings(){
     <h3>Account</h3>
     <p style="font-size:13px;color:var(--muted)">Signed in as <b>@${esc(displayHandle(PROFILE))}</b> (${PROFILE.role}). All entries save to the cloud automatically — log in from any device to see your data.</p>
   </div>`;
+}
+async function changeName(){
+  const n=document.getElementById("cp_name").value.trim();
+  if(!n){ toast("Team name can't be empty."); return; }
+  const {error} = await sb.from("profiles").update({name:n}).eq("id",PROFILE.id);
+  if(error){ toast("Failed: "+error.message); return; }
+  PROFILE.name=n;
+  const ap=ALL_PROFILES.find(p=>p.id===PROFILE.id); if(ap) ap.name=n;
+  document.getElementById("whoAmI").innerHTML =
+    `${esc(PROFILE.name||displayHandle(PROFILE))} <span class="tag" style="background:rgba(255,255,255,.18);color:#fff">${PROFILE.role==="admin"?"ADMIN":"TEAM LEAD"}</span>`;
+  toast("Team name updated ✓");
 }
 async function changePass(){
   const n=document.getElementById("cp_new").value;
