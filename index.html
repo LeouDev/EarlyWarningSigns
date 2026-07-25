@@ -293,7 +293,7 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
     <div class="grid2">
       <div class="field"><label>Employee Name *</label><input id="f_name" placeholder="Last, First MI"></div>
       <div class="field"><label>Employee ID *</label><input id="f_empid" placeholder="e.g. 1370513"></div>
-      <div class="field"><label>Position</label><input id="f_pos" placeholder="e.g. QA Analyst"></div>
+      <div class="field"><label>Position</label><select id="f_pos"></select></div>
       <div class="field"><label>Date Hired</label><input id="f_hired" type="date"></div>
     </div>
     <div class="field"><label>Warning Indicators</label></div>
@@ -303,11 +303,21 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
         <select id="f_cap" onchange="updatePreview()"><option>NO</option><option>YES</option></select></div>
       <div class="field"><label>Rating (Last 3 Mo.)</label><input id="f_rating" placeholder="e.g. 4.2 / Meets"></div>
       <div class="field"><label>Confirmed Attrition?</label>
-        <select id="f_attrition" onchange="updatePreview();toggleAttritionDate()"><option value="">No — auto status</option><option value="BLACK">⚫ Yes — mark BLACK</option></select></div>
+        <select id="f_attrition" onchange="updatePreview();toggleStatusFields()">
+          <option value="">No — auto status</option>
+          <option value="BLACK">⚫ Yes — mark BLACK</option>
+          <option value="ABSCONDING">🚨 Absconding</option>
+          <option value="LOA">📄 LOA (Leave of Absence)</option>
+          <option value="MATERNITY">🤰 Maternity Leave</option>
+        </select></div>
     </div>
     <div class="field" id="f_attrition_date_wrap" style="display:none;max-width:240px">
       <label>Attrition Date</label><input id="f_attrition_date" type="date">
       <p style="font-size:11.5px;color:var(--muted);margin-top:4px">This employee will move from the active roster to Permanent Attrition. Leave blank to default to today.</p>
+    </div>
+    <div class="grid2" id="f_leave_dates_wrap" style="display:none">
+      <div class="field"><label>Start Date</label><input id="f_leave_start" type="date"></div>
+      <div class="field"><label>Expected Date of Return</label><input id="f_leave_return" type="date"></div>
     </div>
     <div class="field"><label>TL Notes</label><textarea id="f_notes" rows="2" placeholder="Observations, coaching actions, retention conversations…"></textarea></div>
     <div class="score-preview">
@@ -529,6 +539,19 @@ const CONFIGURED = SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY.leng
 let sb = null;
 if (CONFIGURED) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const POSITIONS = [
+  "OCN","Outreach","B vs D","EDITS","C&S Pharma Admin","C&S Appeals Verification",
+  "AV Commercial","Clinical Appeals","A&M - Cancellation WB","A&M - Cancellation SP",
+  "A&M - Live","Outreach Denial","OBD Phone","PartD_Phones","Gen_Phones","Fax",
+  "GLP_1","UHC_west","Clinical Appeals Phone","Misroutes","CE","SME","Escalation"
+];
+function populatePositionSelect(currentVal){
+  const sel = document.getElementById("f_pos");
+  let opts = ['<option value="">Select position…</option>', ...POSITIONS.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`)];
+  if(currentVal && !POSITIONS.includes(currentVal)) opts.push(`<option value="${esc(currentVal)}">${esc(currentVal)} (existing)</option>`);
+  sel.innerHTML = opts.join("");
+  sel.value = currentVal || "";
+}
 const INDICATORS = [
   ["tardy","Frequent Tardiness"],
   ["absent","Increased Absences"],
@@ -563,8 +586,15 @@ function closeModal(id){ document.getElementById(id).classList.remove("open"); }
 function openHelp(){ document.getElementById("helpModalBg").classList.add("open"); document.getElementById("helpScroll").scrollTop = 0; }
 function jumpHelp(id){ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:"smooth", block:"start"}); }
 function calcScore(e){ let n=INDICATORS.reduce((a,[k])=>a+((e.ind&&e.ind[k])==="YES"?1:0),0); if(e.cap==="YES")n++; return n; }
-function calcStatus(e){ if(e.attrition==="BLACK")return"BLACK"; const s=calcScore(e); return s===0?"GREEN":s<=3?"YELLOW":"RED"; }
+function calcStatus(e){ if(e.attrition==="BLACK")return"BLACK"; if(LEAVE_META[e.attrition])return"RED"; const s=calcScore(e); return s===0?"GREEN":s<=3?"YELLOW":"RED"; }
 function statusBadge(st){ return `<span class="badge b-${st}">${STATUS_META[st].icon} ${st}</span>`; }
+const LEAVE_META = {ABSCONDING:{icon:"🚨",label:"Absconding"}, LOA:{icon:"📄",label:"LOA"}, MATERNITY:{icon:"🤰",label:"Maternity"}};
+function leaveBadge(e){
+  if(!LEAVE_META[e.attrition]) return "";
+  const m = LEAVE_META[e.attrition];
+  const range = [fmtDate(e.leave_start), fmtDate(e.leave_return)].filter(Boolean).join(" → ");
+  return `<div style="margin-top:4px;font-size:9px;font-family:var(--r-mono);color:var(--gold-deep);white-space:normal">${m.icon} ${m.label}${range?"<br>"+esc(range):""}</div>`;
+}
 function fmtDate(iso){ return iso? String(iso).slice(0,10):""; }
 
 /* =============== AUTH =============== */
@@ -881,7 +911,7 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
     const indCells=INDICATORS.map(([k])=>`<td style="text-align:center" class="${(e.ind&&e.ind[k])==="YES"?"yn-yes":"yn-no"}">${(e.ind&&e.ind[k])||"NO"}</td>`).join("");
     return `<tr>
       <td>${i+1}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.empid)}</td><td>${esc(e.pos)}</td><td>${esc(e.hired)}</td>
-      <td>${statusBadge(st)}</td>${indCells}
+      <td>${statusBadge(st)}${leaveBadge(e)}</td>${indCells}
       <td style="text-align:center" class="${e.cap==="YES"?"yn-yes":"yn-no"}">${e.cap||"NO"}</td>
       <td style="text-align:center"><span class="score-pill" style="background:${scBg}">${sc}</span></td>
       <td>${esc(e.rating)}</td><td class="wrap">${esc(e.notes)}</td>${readOnly?"":`<td>${fmtDate(e.updated_at)}</td>`}
@@ -934,20 +964,24 @@ function openEmpModal(empId){
   document.getElementById("empModalTitle").textContent=e?"Edit Employee":"Add Employee";
   document.getElementById("f_name").value=e?e.name:"";
   document.getElementById("f_empid").value=e?e.empid:"";
-  document.getElementById("f_pos").value=e?e.pos:"";
+  populatePositionSelect(e?e.pos:"");
   document.getElementById("f_hired").value=e?(e.hired||""):"";
   document.getElementById("f_cap").value=e?(e.cap||"NO"):"NO";
   document.getElementById("f_rating").value=e?(e.rating||""):"";
   document.getElementById("f_attrition").value=e?(e.attrition||""):"";
   document.getElementById("f_attrition_date").value=e?(e.attrition_date||""):"";
+  document.getElementById("f_leave_start").value=e?(e.leave_start||""):"";
+  document.getElementById("f_leave_return").value=e?(e.leave_return||""):"";
   document.getElementById("f_notes").value=e?(e.notes||""):"";
   indState={}; INDICATORS.forEach(([k])=>{ indState[k]= e&&e.ind? (e.ind[k]||"NO"):"NO"; });
-  drawIndGrid(); updatePreview(); toggleAttritionDate();
+  drawIndGrid(); updatePreview(); toggleStatusFields();
   document.getElementById("empModalBg").classList.add("open");
 }
-function toggleAttritionDate(){
-  const on = document.getElementById("f_attrition").value === "BLACK";
-  document.getElementById("f_attrition_date_wrap").style.display = on? "block":"none";
+const LEAVE_TYPES = Object.keys(LEAVE_META);
+function toggleStatusFields(){
+  const val = document.getElementById("f_attrition").value;
+  document.getElementById("f_attrition_date_wrap").style.display = val==="BLACK"? "block":"none";
+  document.getElementById("f_leave_dates_wrap").style.display = LEAVE_TYPES.includes(val)? "grid":"none";
 }
 function drawIndGrid(){
   document.getElementById("indGrid").innerHTML=INDICATORS.map(([k,lbl])=>`
@@ -970,6 +1004,7 @@ async function saveEmployee(){
   if(!name||!empid){ toast("Employee Name and Employee ID are required."); return; }
   const attrition = document.getElementById("f_attrition").value;
   const attrDateRaw = document.getElementById("f_attrition_date").value;
+  const isLeave = LEAVE_TYPES.includes(attrition);
   const row={
     owner:PROFILE.id, name, empid,
     pos:document.getElementById("f_pos").value.trim(),
@@ -979,6 +1014,8 @@ async function saveEmployee(){
     rating:document.getElementById("f_rating").value.trim(),
     attrition,
     attrition_date: attrition==="BLACK" ? (attrDateRaw || new Date().toISOString().slice(0,10)) : null,
+    leave_start: isLeave ? (document.getElementById("f_leave_start").value || null) : null,
+    leave_return: isLeave ? (document.getElementById("f_leave_return").value || null) : null,
     notes:document.getElementById("f_notes").value.trim(),
     updated_at:new Date().toISOString()
   };
@@ -990,7 +1027,7 @@ async function saveEmployee(){
   btn.disabled=false; btn.textContent="Save Employee";
   if(error){ toast("Save failed: "+error.message); return; }
   closeModal("empModalBg");
-  toast(attrition==="BLACK" ? "Employee moved to Permanent Attrition ✓" : (editingEmpId?"Employee updated ✓ saved to cloud":"Employee added ✓ saved to cloud"));
+  toast(attrition==="BLACK" ? "Employee moved to Permanent Attrition ✓" : isLeave? "Leave status saved ✓" : (editingEmpId?"Employee updated ✓ saved to cloud":"Employee added ✓ saved to cloud"));
   render();
 }
 async function deleteEmployee(id){
@@ -1003,10 +1040,11 @@ async function deleteEmployee(id){
 /* =============== BULK EXCEL IMPORT/EXPORT =============== */
 const EXCEL_HEADERS = ["Employee Name","Employee ID","Position","Date Hired (YYYY-MM-DD)",
   ...INDICATORS.map(([,l])=>l+" (YES/NO)"), "With Active CAP? (YES/NO)",
-  "Rating (Last 3 Mo.)", "Confirmed Attrition? (leave blank or type YES)", "TL Notes"];
+  "Rating (Last 3 Mo.)", "Confirmed Attrition? (blank / YES / ABSCONDING / LOA / MATERNITY)",
+  "Leave/Attrition Date (YYYY-MM-DD)", "Expected Return Date (YYYY-MM-DD, LOA/Maternity only)", "TL Notes"];
 function downloadEmpTemplate(){
   const sample = ["Dela Cruz, Juan","1234567","QA Analyst","2023-06-01",
-    ...INDICATORS.map(()=>"NO"), "NO", "Meets Expectations", "", "Optional notes"];
+    ...INDICATORS.map(()=>"NO"), "NO", "Meets Expectations", "", "", "", "Optional notes"];
   const ws = XLSX.utils.aoa_to_sheet([EXCEL_HEADERS, sample]);
   ws["!cols"] = EXCEL_HEADERS.map(h=>({wch: Math.max(16, Math.min(30, h.length+2))}));
   const wb = XLSX.utils.book_new();
@@ -1040,9 +1078,15 @@ async function uploadEmpExcel(input){
       const ind = {};
       INDICATORS.forEach(([k,l])=>{ ind[k] = normYN(keyOf(row, l)); });
       const attritionRaw = String(keyOf(row,"Confirmed Attrition")||"").trim().toUpperCase();
+      const isBlack = attritionRaw==="YES"||attritionRaw==="BLACK";
+      const isLeaveRow = LEAVE_TYPES.includes(attritionRaw);
+      const attrition = isBlack? "BLACK" : (isLeaveRow? attritionRaw : "");
+      const asDate = v=>{ v = v instanceof Date? v.toISOString().slice(0,10) : String(v||"").trim(); return v||null; };
       let hired = keyOf(row,"Date Hired");
       if(hired instanceof Date) hired = hired.toISOString().slice(0,10);
       else hired = String(hired||"").trim();
+      const dateCol = asDate(keyOf(row,"Leave/Attrition Date"));
+      const returnCol = asDate(keyOf(row,"Expected Return Date"));
       toInsert.push({
         owner: PROFILE.id, name, empid,
         pos: String(keyOf(row,"Position")||"").trim(),
@@ -1050,8 +1094,10 @@ async function uploadEmpExcel(input){
         ind,
         cap: normYN(keyOf(row,"With Active CAP")),
         rating: String(keyOf(row,"Rating")||"").trim(),
-        attrition: (attritionRaw==="YES"||attritionRaw==="BLACK")? "BLACK" : "",
-        attrition_date: (attritionRaw==="YES"||attritionRaw==="BLACK")? new Date().toISOString().slice(0,10) : null,
+        attrition,
+        attrition_date: isBlack? (dateCol || new Date().toISOString().slice(0,10)) : null,
+        leave_start: isLeaveRow? dateCol : null,
+        leave_return: isLeaveRow? returnCol : null,
         notes: String(keyOf(row,"TL Notes")||"").trim(),
         updated_at: new Date().toISOString()
       });
@@ -1327,7 +1373,85 @@ function renderAttrition(isAdmin){
       <thead><tr><th>#</th><th>Employee Name</th><th>Employee ID</th>${showTeamCol?"<th>Team</th>":""}<th>Position</th><th>Date Hired</th><th>Attrition Date</th><th>Last Risk Score</th><th>Rating (Last 3 Mo.)</th><th>TL Notes</th>${isAdmin?"":"<th>Actions</th>"}</tr></thead>
       <tbody>${rows}</tbody></table></div>`}
     ${isAdmin?"":`<p style="font-size:12px;color:var(--muted);margin-top:10px">To bring someone back to your active roster, edit their entry and change <b>Confirmed Attrition?</b> back to "No".</p>`}
+  </div>
+  ${renderLeaveRegister(isAdmin)}`;
+}
+let LEAVE_MONTH = "all";
+function renderLeaveRegister(isAdmin){
+  let list;
+  if(isAdmin){
+    const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+    const scope = ATTR_TEAM==="all"? tls : tls.filter(p=>p.id===ATTR_TEAM);
+    list = [];
+    scope.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>LEAVE_META[e.attrition]).forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
+  } else {
+    list = EMPS.filter(e=>LEAVE_META[e.attrition]);
+  }
+  const showTeamCol = isAdmin && ATTR_TEAM==="all";
+  const monthKeys = [...new Set(list.map(e=>monthKey(e.leave_start||e.updated_at)).filter(Boolean))].sort().reverse();
+  if(!monthKeys.includes(LEAVE_MONTH)) LEAVE_MONTH="all";
+  const monthSel = `<select id="leaveMonthSel" onchange="LEAVE_MONTH=this.value;render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px">
+    <option value="all" ${LEAVE_MONTH==="all"?"selected":""}>All Months</option>
+    ${monthKeys.map(k=>`<option value="${k}" ${LEAVE_MONTH===k?"selected":""}>${monthLabel(k)}</option>`).join("")}
+  </select>`;
+  if(LEAVE_MONTH!=="all") list = list.filter(e=>monthKey(e.leave_start||e.updated_at)===LEAVE_MONTH);
+  list.sort((a,b)=> new Date(b.leave_start||b.updated_at) - new Date(a.leave_start||a.updated_at));
+  const today = new Date().toISOString().slice(0,10);
+  const rows = list.map((e,i)=>{
+    const m = LEAVE_META[e.attrition];
+    const overdue = e.leave_return && e.leave_return < today;
+    return `<tr>
+    <td>${i+1}</td>
+    <td><b>${esc(e.name)}</b></td>
+    <td>${esc(e.empid)}</td>
+    ${showTeamCol? `<td>${esc(e._team||"")}</td>`:""}
+    <td>${esc(e.pos)}</td>
+    <td><span class="badge" style="background:var(--yellow-bg);color:var(--gold-deep)">${m.icon} ${m.label}</span></td>
+    <td>${fmtDate(e.leave_start)||"—"}</td>
+    <td>${fmtDate(e.leave_return)||"—"}</td>
+    <td>${overdue? `<span class="badge b-RED">⚠ Return Overdue</span>` : `<span class="badge b-GREEN">🌿 On Leave</span>`}</td>
+    <td class="wrap">${esc(e.notes)}</td>
+    ${isAdmin?"":`<td class="row-actions">
+        <button class="btn btn-ghost btn-sm" title="Edit / End Leave" onclick="openEmpModal('${e.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${e.id}')">🗑</button></td>`}
+  </tr>`;}).join("");
+  return `
+  <div class="card">
+    <h3>🌿 Leave & Absence Register${isAdmin? " — All Teams":""}</h3>
+    <div class="stats" style="margin-bottom:14px">
+      <div class="stat s-yellow"><div class="num">${list.length}</div><div class="lbl">On Leave / Absent</div></div>
+    </div>
+    <div class="toolbar">
+      ${monthSel}
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" onclick="exportLeaveCSV(${isAdmin})">⬇ Export CSV</button>
+    </div>
+    ${list.length===0? `<div class="empty">No one is currently tagged Absconding, LOA, or Maternity Leave${isAdmin&&ATTR_TEAM!=="all"?" for this team":""}${LEAVE_MONTH!=="all"?" in "+monthLabel(LEAVE_MONTH):""}. Set <b>Confirmed Attrition?</b> to Absconding, LOA, or Maternity Leave in a tracker entry to add someone here.</div>`:`
+    <div class="tbl-wrap"><table class="fit">
+      <thead><tr><th>#</th><th>Employee Name</th><th>Employee ID</th>${showTeamCol?"<th>Team</th>":""}<th>Position</th><th>Type</th><th>Start Date</th><th>Expected Return</th><th>Status</th><th>TL Notes</th>${isAdmin?"":"<th>Actions</th>"}</tr></thead>
+      <tbody>${rows}</tbody></table></div>`}
+    ${isAdmin?"":`<p style="font-size:12px;color:var(--muted);margin-top:10px">These employees stay on your active roster — this is just a quick view of who's currently out. Change <b>Confirmed Attrition?</b> back to "No" once they return.</p>`}
   </div>`;
+}
+function exportLeaveCSV(isAdmin){
+  let list;
+  if(isAdmin){
+    const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
+    const scope = ATTR_TEAM==="all"? tls : tls.filter(p=>p.id===ATTR_TEAM);
+    list = [];
+    scope.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>LEAVE_META[e.attrition]).forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
+  } else {
+    list = EMPS.filter(e=>LEAVE_META[e.attrition]);
+  }
+  if(LEAVE_MONTH!=="all") list = list.filter(e=>monthKey(e.leave_start||e.updated_at)===LEAVE_MONTH);
+  const head=["#","Employee Name","Employee ID", ...(isAdmin?["Team"]:[]), "Position","Type","Start Date","Expected Return","TL Notes"];
+  const lines=[head.map(csvCell).join(",")];
+  list.forEach((e,i)=>{
+    lines.push([i+1, e.name, e.empid, ...(isAdmin?[e._team||""]:[]), e.pos, LEAVE_META[e.attrition].label, fmtDate(e.leave_start), fmtDate(e.leave_return), e.notes].map(csvCell).join(","));
+  });
+  const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="Leave_Register"+(isAdmin?"_AllTeams":"_"+String(PROFILE.name||displayHandle(PROFILE)).replace(/\W+/g,"_"))+".csv"; a.click();
 }
 function exportAttritionCSV(isAdmin){
   let list;
@@ -1424,11 +1548,12 @@ function exportCSV(ownerId){
   const p = ALL_PROFILES.find(x=>x.id===ownerId);
   const teamName = p? (p.name||displayHandle(p)) : (PROFILE.name||displayHandle(PROFILE));
   const head=["#","Employee Name","Employee ID","Position","Date Hired","Risk Status",
-    ...INDICATORS.map(([,l])=>l),"With Active CAP?","Risk Score","Rating (Last 3 Mo.)","TL Notes","Last Updated"];
+    ...INDICATORS.map(([,l])=>l),"With Active CAP?","Risk Score","Rating (Last 3 Mo.)","Leave Status","Leave Start","Expected Return","TL Notes","Last Updated"];
   const lines=[head.map(csvCell).join(",")];
   emps.forEach((e,i)=>{
     lines.push([i+1,e.name,e.empid,e.pos,e.hired,calcStatus(e),
-      ...INDICATORS.map(([k])=>(e.ind&&e.ind[k])||"NO"), e.cap||"NO", calcScore(e), e.rating, e.notes, fmtDate(e.updated_at)
+      ...INDICATORS.map(([k])=>(e.ind&&e.ind[k])||"NO"), e.cap||"NO", calcScore(e), e.rating,
+      LEAVE_META[e.attrition]?LEAVE_META[e.attrition].label:"", fmtDate(e.leave_start), fmtDate(e.leave_return), e.notes, fmtDate(e.updated_at)
     ].map(csvCell).join(","));
   });
   const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
