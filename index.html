@@ -535,6 +535,28 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
   </div>
 </div>
 
+<!-- ================= BULK TRANSFER MODAL ================= -->
+<div class="modal-bg" id="bulkTransferModalBg">
+  <div class="modal" style="width:480px">
+    <h3>🔁 Bulk Transfer</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Select employees to transfer and where to send them. The receiving team lead must approve each one before they move off your roster.</p>
+    <div class="field"><label>Transfer To</label><select id="bt_target"></select></div>
+    <div class="field">
+      <label style="display:flex;align-items:center;justify-content:space-between">
+        <span>Select Employees</span>
+        <a style="font-size:12px;cursor:pointer;color:var(--gold-deep)" onclick="toggleBulkSelectAll()">Select all / none</a>
+      </label>
+      <div id="bt_empList" style="max-height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff"></div>
+    </div>
+    <div class="field"><label>Note (optional)</label><textarea id="bt_note" rows="2" placeholder="Reason for transfer…"></textarea></div>
+    <div class="err" id="bt_err" style="color:var(--red);font-size:12.5px;min-height:16px"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('bulkTransferModalBg')">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="sendBulkTransferBtn" onclick="sendBulkTransferRequest()">Send Requests</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= HEADCOUNT MODAL ================= -->
 <div class="modal-bg" id="hcModalBg">
   <div class="modal" style="width:560px">
@@ -1005,6 +1027,7 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
         <button class="btn btn-ghost btn-sm" onclick="document.getElementById('empExcelFile').click()">📤 Upload Filled Excel</button>
         <input type="file" id="empExcelFile" accept=".xlsx,.xls" style="display:none" onchange="uploadEmpExcel(this)">
       </div>
+      <button class="btn btn-ghost btn-sm" onclick="openBulkTransferModal()">🔁 Bulk Transfer</button>
       <button class="btn btn-primary btn-sm" onclick="openEmpModal()">＋ Add Employee</button>`}
     </div>
     ${allEmps.length===0? `<div class="empty">No employees yet.${readOnly?"":" Click <b>＋ Add Employee</b> to start tracking."}</div>`:`
@@ -1171,6 +1194,51 @@ async function cancelTransfer(reqId){
   const {error} = await sb.from("transfer_requests").update({status:"cancelled"}).eq("id",reqId);
   if(error){ toast("Failed: "+error.message); return; }
   toast("Transfer request cancelled."); render();
+}
+
+/* =============== BULK TRANSFER =============== */
+function openBulkTransferModal(){
+  const sel = document.getElementById("bt_target");
+  sel.innerHTML = PEERS.length
+    ? PEERS.map(p=>`<option value="${p.id}">${esc(p.name||p.username)}</option>`).join("")
+    : `<option value="">No other users available yet</option>`;
+  document.getElementById("bt_note").value = "";
+  document.getElementById("bt_err").textContent = "";
+  const list = document.getElementById("bt_empList");
+  if(!EMPS.length){
+    list.innerHTML = `<div style="font-size:12.5px;color:var(--muted)">No employees on your team yet.</div>`;
+  } else {
+    list.innerHTML = EMPS.map(e=>{
+      const pend = ALL_TRANSFERS.find(t=>t.employee_id===e.id && t.from_owner===PROFILE.id && t.status==="pending");
+      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;${pend?"opacity:.5":""}">
+        <input type="checkbox" value="${e.id}" ${pend?"disabled":""}>
+        <span>${esc(e.name)} <span style="color:var(--muted)">— ${esc(e.empid)}${e.pos?" · "+esc(e.pos):""}</span>${pend?` <span style="color:var(--gold-deep)">(pending transfer)</span>`:""}</span>
+      </label>`;
+    }).join("");
+  }
+  document.getElementById("bulkTransferModalBg").classList.add("open");
+}
+function toggleBulkSelectAll(){
+  const boxes = [...document.querySelectorAll("#bt_empList input[type=checkbox]:not(:disabled)")];
+  const allChecked = boxes.length && boxes.every(b=>b.checked);
+  boxes.forEach(b=>b.checked = !allChecked);
+}
+async function sendBulkTransferRequest(){
+  const target = document.getElementById("bt_target").value;
+  const err = document.getElementById("bt_err");
+  const ids = [...document.querySelectorAll("#bt_empList input[type=checkbox]:checked")].map(b=>b.value);
+  if(!target){ err.textContent = "No target user selected."; return; }
+  if(!ids.length){ err.textContent = "Select at least one employee."; return; }
+  const note = document.getElementById("bt_note").value.trim();
+  const btn = document.getElementById("sendBulkTransferBtn");
+  btn.disabled = true; btn.textContent = "Sending…";
+  const rows = ids.map(id=>({ employee_id:id, from_owner:PROFILE.id, to_owner:target, note }));
+  const {error} = await sb.from("transfer_requests").insert(rows);
+  btn.disabled = false; btn.textContent = "Send Requests";
+  if(error){ err.textContent = "Failed: "+error.message; return; }
+  closeModal("bulkTransferModalBg");
+  toast(`${ids.length} transfer request${ids.length===1?"":"s"} sent — waiting for approval.`);
+  render();
 }
 async function respondTransfer(reqId, approve){
   if(approve && !confirm("Approve this transfer? The employee will be added to your team.")) return;
