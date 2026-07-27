@@ -1210,9 +1210,9 @@ function openBulkTransferModal(){
   } else {
     list.innerHTML = EMPS.map(e=>{
       const pend = ALL_TRANSFERS.find(t=>t.employee_id===e.id && t.from_owner===PROFILE.id && t.status==="pending");
-      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;${pend?"opacity:.5":""}">
-        <input type="checkbox" value="${e.id}" ${pend?"disabled":""}>
-        <span>${esc(e.name)} <span style="color:var(--muted)">— ${esc(e.empid)}${e.pos?" · "+esc(e.pos):""}</span>${pend?` <span style="color:var(--gold-deep)">(pending transfer)</span>`:""}</span>
+      return `<label style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:13px;text-align:left;${pend?"opacity:.5":""}">
+        <input type="checkbox" value="${e.id}" style="width:auto;flex:none;margin-top:3px" ${pend?"disabled":""}>
+        <span style="text-align:left">${esc(e.name)} <span style="color:var(--muted)">— ${esc(e.empid)}${e.pos?" · "+esc(e.pos):""}</span>${pend?` <span style="color:var(--gold-deep)">(pending transfer)</span>`:""}</span>
       </label>`;
     }).join("");
   }
