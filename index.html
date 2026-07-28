@@ -335,7 +335,7 @@ details[open] .legend-summary::before{transform:rotate(90deg)}
     </div>
     <div class="field" id="f_attrition_date_wrap" style="display:none;max-width:240px">
       <label>Attrition Date</label><input id="f_attrition_date" type="date">
-      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">This employee will move from the active roster to Permanent Attrition. Leave blank to default to today.</p>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">This employee moves to Permanent Attrition once this date arrives — until then they stay on your active roster, sorted to the top. Leave blank to default to today (moves immediately).</p>
     </div>
     <div class="grid2" id="f_leave_dates_wrap" style="display:none">
       <div class="field"><label>Start Date</label><input id="f_leave_start" type="date"></div>
@@ -647,6 +647,15 @@ function openHelp(){ document.getElementById("helpModalBg").classList.add("open"
 function jumpHelp(id){ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:"smooth", block:"start"}); }
 function calcScore(e){ let n=INDICATORS.reduce((a,[k])=>a+((e.ind&&e.ind[k])==="YES"?1:0),0); if(e.cap==="YES")n++; return n; }
 function calcStatus(e){ if(e.attrition==="BLACK")return"BLACK"; if(LEAVE_META[e.attrition])return"RED"; const s=calcScore(e); return s===0?"GREEN":s<=3?"YELLOW":"RED"; }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+/* An employee marked BLACK only actually moves to Permanent Attrition
+   once their attrition date has arrived. A future-dated BLACK stays on
+   the active roster (still shown, sorted first) until that date hits. */
+function isAttrited(e){
+  if(e.attrition!=="BLACK") return false;
+  if(!e.attrition_date) return true;
+  return String(e.attrition_date).slice(0,10) <= todayISO();
+}
 function statusBadge(st){ return `<span class="badge b-${st}">${STATUS_META[st].icon} ${st}</span>`; }
 const LEAVE_META = {ABSCONDING:{icon:"🚨",label:"Absconding"}, LOA:{icon:"📄",label:"LOA"}, MATERNITY:{icon:"🤰",label:"Maternity"}};
 function leaveBadge(e){
@@ -875,9 +884,9 @@ async function loadAdminData(){
 
 /* =============== ADMIN: DASHBOARD =============== */
 function teamStats(emps){
-  const active = emps.filter(e=>e.attrition!=="BLACK");
+  const active = emps.filter(e=>!isAttrited(e));
   const attritted = emps.length - active.length;
-  const c={GREEN:0,YELLOW:0,RED:0}; let sum=0; const ic={};
+  const c={GREEN:0,YELLOW:0,RED:0,BLACK:0}; let sum=0; const ic={};
   active.forEach(e=>{ c[calcStatus(e)]++; sum+=calcScore(e);
     INDICATORS.forEach(([k,l])=>{ if(e.ind&&e.ind[k]==="YES") ic[l]=(ic[l]||0)+1; }); });
   const total=active.length;
@@ -952,7 +961,7 @@ function renderStatusDrill(){
   const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
   let list = [];
   tls.forEach(p=>{
-    const active = (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition!=="BLACK");
+    const active = (TEAM_EMPS[p.id]||[]).filter(e=>!isAttrited(e));
     active.forEach(e=>{
       const st = calcStatus(e);
       if(type==="ALL" || st===type) list.push({...e, _team:p.name||displayHandle(p), _status:st});
@@ -994,7 +1003,7 @@ function exportStatusDrillCSV(){
   const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
   let list = [];
   tls.forEach(p=>{
-    (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition!=="BLACK").forEach(e=>{
+    (TEAM_EMPS[p.id]||[]).filter(e=>!isAttrited(e)).forEach(e=>{
       const st = calcStatus(e);
       if(type==="ALL" || st===type) list.push({...e, _team:p.name||displayHandle(p), _status:st});
     });
@@ -1009,8 +1018,8 @@ function exportStatusDrillCSV(){
 
 /* =============== TRACKER =============== */
 function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
-  const attrittedCount = allEmpsRaw.filter(e=>e.attrition==="BLACK").length;
-  const allEmps = allEmpsRaw.filter(e=>e.attrition!=="BLACK");
+  const attrittedCount = allEmpsRaw.filter(e=>isAttrited(e)).length;
+  const allEmps = allEmpsRaw.filter(e=>!isAttrited(e));
   const emps = allEmps.filter(e=>{
     if(!searchQ) return true; const q=searchQ.toLowerCase();
     return (e.name||"").toLowerCase().includes(q)||(e.empid||"").toLowerCase().includes(q)||(e.pos||"").toLowerCase().includes(q);
@@ -1158,7 +1167,12 @@ async function saveEmployee(){
   btn.disabled=false; btn.textContent="Save Employee";
   if(error){ toast("Save failed: "+error.message); return; }
   closeModal("empModalBg");
-  toast(attrition==="BLACK" ? "Employee moved to Permanent Attrition ✓" : isLeave? "Leave status saved ✓" : (editingEmpId?"Employee updated ✓ saved to cloud":"Employee added ✓ saved to cloud"));
+  const nowAttrited = attrition==="BLACK" && row.attrition_date<=todayISO();
+  toast(
+    nowAttrited ? "Employee moved to Permanent Attrition ✓" :
+    attrition==="BLACK" ? `Confirmed attrition saved — moves to Permanent Attrition on ${row.attrition_date} ✓` :
+    isLeave? "Leave status saved ✓" : (editingEmpId?"Employee updated ✓ saved to cloud":"Employee added ✓ saved to cloud")
+  );
   render();
 }
 async function deleteEmployee(id){
@@ -1574,13 +1588,13 @@ function renderAttrition(isAdmin){
     </select>`;
     if(ATTR_TEAM==="all"){
       list = [];
-      tls.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition==="BLACK").forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
+      tls.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>isAttrited(e)).forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
     } else {
       const p = ALL_PROFILES.find(x=>x.id===ATTR_TEAM);
-      list = (TEAM_EMPS[ATTR_TEAM]||[]).filter(e=>e.attrition==="BLACK").map(e=>({...e, _team:p?(p.name||displayHandle(p)):"Team"}));
+      list = (TEAM_EMPS[ATTR_TEAM]||[]).filter(e=>isAttrited(e)).map(e=>({...e, _team:p?(p.name||displayHandle(p)):"Team"}));
     }
   } else {
-    list = EMPS.filter(e=>e.attrition==="BLACK");
+    list = EMPS.filter(e=>isAttrited(e));
   }
   const monthKeys = [...new Set(list.map(e=>monthKey(e.attrition_date||e.updated_at)).filter(Boolean))].sort().reverse();
   if(!monthKeys.includes(ATTR_MONTH)) ATTR_MONTH="all";
@@ -1707,9 +1721,9 @@ function exportAttritionCSV(isAdmin){
     list = [];
     const tls = ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
     const scope = ATTR_TEAM==="all"? tls : tls.filter(p=>p.id===ATTR_TEAM);
-    scope.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>e.attrition==="BLACK").forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
+    scope.forEach(p=>{ (TEAM_EMPS[p.id]||[]).filter(e=>isAttrited(e)).forEach(e=>list.push({...e, _team:p.name||displayHandle(p)})); });
   } else {
-    list = EMPS.filter(e=>e.attrition==="BLACK");
+    list = EMPS.filter(e=>isAttrited(e));
   }
   if(ATTR_MONTH!=="all") list = list.filter(e=>monthKey(e.attrition_date||e.updated_at)===ATTR_MONTH);
   const head=["#","Employee Name","Employee ID", ...(isAdmin?["Team"]:[]), "Position","Date Hired","Attrition Date","Last Risk Score","Rating (Last 3 Mo.)","TL Notes"];
@@ -1727,7 +1741,7 @@ function renderPerformer(){
   const now=Date.now();
   const tls=ALL_PROFILES.filter(p=>p.role!=="admin" && p.approved);
   const items=tls.map(p=>{
-    const emps=(TEAM_EMPS[p.id]||[]).filter(e=>e.attrition!=="BLACK");
+    const emps=(TEAM_EMPS[p.id]||[]).filter(e=>!isAttrited(e));
     if(emps.length===0) return {p, n:0, avg:null, last:null};
     const ages=emps.map(e=>(now-new Date(e.updated_at).getTime())/86400000);
     const avg=ages.reduce((a,b)=>a+b,0)/ages.length;
@@ -1784,10 +1798,10 @@ async function loadSnapshots(isAdmin){
 async function captureSnapshot(){
   if(snapCaptured || PROFILE.role==="admin" || !PROFILE.approved) return;
   snapCaptured = true;
-  const active = EMPS.filter(e=>e.attrition!=="BLACK");
+  const active = EMPS.filter(e=>!isAttrited(e));
   const c = {GREEN:0, YELLOW:0, RED:0};
   active.forEach(e=>c[calcStatus(e)]++);
-  const black = EMPS.filter(e=>e.attrition==="BLACK").length;
+  const black = EMPS.filter(e=>isAttrited(e)).length;
   await sb.from("risk_snapshots").upsert({
     owner: PROFILE.id, snap_date: new Date().toISOString().slice(0,10),
     green: c.GREEN, yellow: c.YELLOW, red: c.RED, black
@@ -1811,7 +1825,7 @@ function trendAttritionByMonth(isAdmin, year){
   const vol = Array(12).fill(0), invol = Array(12).fill(0), black = Array(12).fill(0);
   hc.filter(r=>r.year===year).forEach(r=>{ vol[r.month-1]+=num(r.vol_attr); invol[r.month-1]+=num(r.invol_attr); });
   trendEmployees(isAdmin).forEach(e=>{
-    if(e.attrition==="BLACK" && e.attrition_date && String(e.attrition_date).slice(0,4)==String(year)){
+    if(isAttrited(e) && e.attrition_date && String(e.attrition_date).slice(0,4)==String(year)){
       const m = parseInt(String(e.attrition_date).slice(5,7),10);
       if(m>=1 && m<=12) black[m-1]++;
     }
@@ -1826,7 +1840,7 @@ function trendClosingHc(isAdmin, year){
   return Array.from({length:12}, (_,i)=> chains.reduce((a,ch)=>a+ch[i].closing, 0));
 }
 function trendIndicatorPareto(isAdmin){
-  const emps = trendEmployees(isAdmin).filter(e=>e.attrition!=="BLACK");
+  const emps = trendEmployees(isAdmin).filter(e=>!isAttrited(e));
   const counts = INDICATORS.map(([k,l])=>({label:l, n: emps.filter(e=>e.ind && e.ind[k]==="YES").length}));
   return counts.filter(c=>c.n>0).sort((a,b)=>b.n-a.n);
 }
