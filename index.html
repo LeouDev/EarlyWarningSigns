@@ -685,6 +685,17 @@ function parseAnyDate(v){
   if(!isNaN(d.getTime())) return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   return s;
 }
+/* Defensive display fix for rows imported before the Excel-serial-date
+   bug was fixed — if "hired" is still a raw numeric string, convert it
+   on the fly for display without needing to touch the stored value. */
+function dispHired(h){
+  const s = String(h==null?"":h).trim();
+  if(/^\d{4,6}$/.test(s)){
+    const norm = parseAnyDate(Number(s));
+    if(norm) return norm;
+  }
+  return s;
+}
 
 /* =============== AUTH =============== */
 const USERNAME_DOMAIN = "ews-tracker.local";
@@ -1016,7 +1027,7 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
     const indCells=INDICATORS.map(([k])=>`<td style="text-align:center" class="${(e.ind&&e.ind[k])==="YES"?"yn-yes":"yn-no"}">${(e.ind&&e.ind[k])||"NO"}</td>`).join("");
     const pend = readOnly? null : pendingFor(e.id);
     return `<tr ${readOnly?"":`ondblclick="openEmpModal('${e.id}')" style="cursor:pointer" title="Double-click to edit"`}>
-      <td>${i+1}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.empid)}</td><td>${esc(e.pos)}</td><td>${esc(e.hired)}</td>
+      <td>${i+1}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.empid)}</td><td>${esc(e.pos)}</td><td>${esc(dispHired(e.hired))}</td>
       <td>${statusBadge(st)}${leaveBadge(e)}</td>${indCells}
       <td style="text-align:center" class="${e.cap==="YES"?"yn-yes":"yn-no"}">${e.cap||"NO"}</td>
       <td style="text-align:center"><span class="score-pill" style="background:${scBg}">${sc}</span></td>
@@ -1083,7 +1094,7 @@ function openEmpModal(empId){
   document.getElementById("f_name").value=e?e.name:"";
   document.getElementById("f_empid").value=e?e.empid:"";
   populatePositionSelect(e?e.pos:"");
-  document.getElementById("f_hired").value=e?(e.hired||""):"";
+  document.getElementById("f_hired").value=e?dispHired(e.hired||""):"";
   document.getElementById("f_cap").value=e?(e.cap||"NO"):"NO";
   document.getElementById("f_rating").value=e?(e.rating||""):"";
   document.getElementById("f_attrition").value=e?(e.attrition||""):"";
@@ -1584,7 +1595,7 @@ function renderAttrition(isAdmin){
     <td>${esc(e.empid)}</td>
     ${showTeamCol? `<td>${esc(e._team||"")}</td>`:""}
     <td>${esc(e.pos)}</td>
-    <td>${esc(e.hired)}</td>
+    <td>${esc(dispHired(e.hired))}</td>
     <td>${fmtDate(e.attrition_date)||"—"}</td>
     <td><span class="score-pill" style="background:var(--black-bg)">${calcScore(e)}</span></td>
     <td>${esc(e.rating)}</td>
@@ -1702,7 +1713,7 @@ function exportAttritionCSV(isAdmin){
   const head=["#","Employee Name","Employee ID", ...(isAdmin?["Team"]:[]), "Position","Date Hired","Attrition Date","Last Risk Score","Rating (Last 3 Mo.)","TL Notes"];
   const lines=[head.map(csvCell).join(",")];
   list.forEach((e,i)=>{
-    lines.push([i+1, e.name, e.empid, ...(isAdmin?[e._team||""]:[]), e.pos, e.hired, fmtDate(e.attrition_date), calcScore(e), e.rating, e.notes].map(csvCell).join(","));
+    lines.push([i+1, e.name, e.empid, ...(isAdmin?[e._team||""]:[]), e.pos, dispHired(e.hired), fmtDate(e.attrition_date), calcScore(e), e.rating, e.notes].map(csvCell).join(","));
   });
   const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
@@ -1973,7 +1984,7 @@ function exportCSV(ownerId){
     ...INDICATORS.map(([,l])=>l),"With Active CAP?","Risk Score","Rating (Last 3 Mo.)","Leave Status","Leave Start","Expected Return","TL Notes","Last Updated"];
   const lines=[head.map(csvCell).join(",")];
   emps.forEach((e,i)=>{
-    lines.push([i+1,e.name,e.empid,e.pos,e.hired,calcStatus(e),
+    lines.push([i+1,e.name,e.empid,e.pos,dispHired(e.hired),calcStatus(e),
       ...INDICATORS.map(([k])=>(e.ind&&e.ind[k])||"NO"), e.cap||"NO", calcScore(e), e.rating,
       LEAVE_META[e.attrition]?LEAVE_META[e.attrition].label:"", fmtDate(e.leave_start), fmtDate(e.leave_return), e.notes, fmtDate(e.updated_at)
     ].map(csvCell).join(","));
