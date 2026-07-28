@@ -1015,6 +1015,8 @@ function renderTracker(ownerId, allEmpsRaw, readOnly, ownerName){
     if(!searchQ) return true; const q=searchQ.toLowerCase();
     return (e.name||"").toLowerCase().includes(q)||(e.empid||"").toLowerCase().includes(q)||(e.pos||"").toLowerCase().includes(q);
   });
+  const STATUS_ORDER = {BLACK:0, RED:1, YELLOW:2, GREEN:3};
+  emps.sort((a,b)=> (STATUS_ORDER[calcStatus(a)]??9) - (STATUS_ORDER[calcStatus(b)]??9));
   const c={GREEN:0,YELLOW:0,RED:0,BLACK:0};
   allEmps.forEach(e=>c[calcStatus(e)]++);
   const incoming = readOnly? [] : ALL_TRANSFERS.filter(t=>t.to_owner===PROFILE.id && t.status==="pending");
