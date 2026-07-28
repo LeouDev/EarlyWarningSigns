@@ -656,6 +656,35 @@ function leaveBadge(e){
   return `<div style="margin-top:4px;font-size:9px;font-family:var(--r-mono);color:var(--gold-deep);white-space:normal">${m.icon} ${m.label}${range?"<br>"+esc(range):""}</div>`;
 }
 function fmtDate(iso){ return iso? String(iso).slice(0,10):""; }
+/* Normalize any Excel/CSV cell value (JS Date, Excel serial number, or
+   assorted text formats like MM/DD/YYYY) into a "YYYY-MM-DD" string. */
+function parseAnyDate(v){
+  if(v==null || v==="") return null;
+  const pad = n => String(n).padStart(2,"0");
+  if(v instanceof Date){
+    if(isNaN(v.getTime())) return null;
+    return `${v.getFullYear()}-${pad(v.getMonth()+1)}-${pad(v.getDate())}`;
+  }
+  if(typeof v === "number"){
+    // Excel serial date: days since 1899-12-30
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if(isNaN(d.getTime())) return null;
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+  }
+  const s = String(v).trim();
+  if(!s) return null;
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){
+    let [,mo,da,yr] = m;
+    if(yr.length===2) yr = (Number(yr)<50?"20":"19")+yr;
+    return `${yr}-${pad(mo)}-${pad(da)}`;
+  }
+  const d = new Date(s);
+  if(!isNaN(d.getTime())) return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  return s;
+}
 
 /* =============== AUTH =============== */
 const USERNAME_DOMAIN = "ews-tracker.local";
@@ -1292,12 +1321,9 @@ async function uploadEmpExcel(input){
       const isBlack = attritionRaw==="YES"||attritionRaw==="BLACK";
       const isLeaveRow = LEAVE_TYPES.includes(attritionRaw);
       const attrition = isBlack? "BLACK" : (isLeaveRow? attritionRaw : "");
-      const asDate = v=>{ v = v instanceof Date? v.toISOString().slice(0,10) : String(v||"").trim(); return v||null; };
-      let hired = keyOf(row,"Date Hired");
-      if(hired instanceof Date) hired = hired.toISOString().slice(0,10);
-      else hired = String(hired||"").trim();
-      const dateCol = asDate(keyOf(row,"Leave/Attrition Date"));
-      const returnCol = asDate(keyOf(row,"Expected Return Date"));
+      const hired = parseAnyDate(keyOf(row,"Date Hired")) || "";
+      const dateCol = parseAnyDate(keyOf(row,"Leave/Attrition Date"));
+      const returnCol = parseAnyDate(keyOf(row,"Expected Return Date"));
       toInsert.push({
         owner: PROFILE.id, name, empid,
         pos: String(keyOf(row,"Position")||"").trim(),
